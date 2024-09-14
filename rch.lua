@@ -663,9 +663,9 @@ NLS([[
 
 -- Función para crear y configurar AnimationTracks
 local function setupAnimationTrack(animation, looped)
-	local track = Instance.new("AnimationTrack")
-	track.Animation = animation
-	track.Rig = character
+	local track = AnimationTrack.new()
+	track:setAnimation(animation)
+	track:setRig(character)
 	track.Looped = looped
 	return track
 end
@@ -675,14 +675,12 @@ local idleTrack = setupAnimationTrack(idleAnimation, true)
 local runTrack = setupAnimationTrack(runAnimation, true)
 local attack1Track = setupAnimationTrack(attack1Animation, false)
 local attack2Track = setupAnimationTrack(attack2Animation, false)
-local attack3Track = setupAnimationTrack(attack3Animation, false)
 
 -- Ajustar pesos de las animaciones
 idleTrack:AdjustWeight(1)
 runTrack:AdjustWeight(2)
 attack1Track:AdjustWeight(5)
 attack2Track:AdjustWeight(5)
-attack3Track:AdjustWeight(5)
 
 local isMoving = false
 local movementThreshold = 0.1
@@ -695,11 +693,9 @@ remote.OnServerEvent:Connect(function()
 		attack1Track:Play()
 	elseif combo == 2 then
 		attack2Track:Play()
-	elseif combo == 3 then
-		attack3Track:Play()
-		combo = 0 -- Reiniciar el combo después del ataque 3
-	else
-		combo = 0 -- Reiniciar el combo si el valor es mayor que 3 (opcional)
+	end
+	if combo > 2 then
+		combo = 0
 	end
 end)
 
@@ -732,4 +728,3 @@ end
 RunService.Heartbeat:Connect(handleMovementAnimations)
 
 print("Script de animación inicializado")
-
