@@ -649,20 +649,6 @@ end)
 
 -- Código LocalScript
 NLS([[
-    local Players = game:GetService("Players")
-    local plr = Players.LocalPlayer
-    local char = plr.Character or plr.CharacterAdded:Wait()
-    local mouse = plr:GetMouse()
-    local name = plr.Name
-    local mainFolder = game:GetService("LocalizationService"):WaitForChild(name .. "'s MainFolder")
-    local remote = mainFolder:WaitForChild("RemoteEvent")
-    print("Remote found")
-    mouse.Button1Down:Connect(function()
-        remote:FireServer()
-    end)
-]])
-
-NLS([[
     local uis = game:GetService("UserInputService")
 local rs = game:GetService("RunService")
 local Players = game:GetService("Players")
@@ -751,42 +737,66 @@ end)
 ]])
 
 NLS([[
-local Owner = game.Players.LocalPlayer  -- Cambiado 'Player' por 'Owner'
-local Mouse = Owner:GetMouse()  -- Definir el mouse para el 'Owner'
+pcall(function()
+	local runService = game:GetService("RunService")
 
-local function setupCharacter(character)
-    local Torso = character:WaitForChild("Torso")
-    local Neck = Torso:WaitForChild("Neck")
-    local LeftShoulder = Torso:WaitForChild("Left Shoulder")
-    local RightShoulder = Torso:WaitForChild("Right Shoulder")
-    local Humanoid = character:WaitForChild("Humanoid")
-    Humanoid.AutoRotate = true  -- Permitir que el personaje se mueva y gire libremente
+	local MOMENTUM_FACTOR = 0.008
+	local MIN_MOMENTUM = 0
+	local MAX_MOMENTUM = 1
+	local SPEED = 15
 
-    local NeckC0 = Neck.C0
-    local RS_C0 = RightShoulder.C0
-    local LS_C0 = LeftShoulder.C0
+	local character = game:GetService("Players").LocalPlayer.Character
+	local humanoid = character.Humanoid
+	local humanoidRootPart = character.HumanoidRootPart
+	local m6d = nil
+	local originalM6dC0 = nil
 
-    game:GetService("RunService").RenderStepped:Connect(function()
-        if not character or not character.Parent then return end
-        local camera = workspace.CurrentCamera
-        local lookVector = (Mouse.Hit.p - camera.CFrame.p).unit
-        local angle = -math.asin(lookVector.y)  -- Invertir el ángulo
+	if humanoid.RigType == Enum.HumanoidRigType.R15 then
+		local lowerTorso = character.LowerTorso
+		m6d = lowerTorso.Root
+	else
+		m6d = humanoidRootPart.RootJoint
+	end
+	originalM6dC0 = m6d.C0
 
-        -- Actualizamos las articulaciones de los brazos
-        RightShoulder.C0 = RS_C0 * CFrame.Angles(0, 0, -angle)  -- Invertir el ángulo para el brazo derecho
-        LeftShoulder.C0 = LS_C0 * CFrame.Angles(0, 0, angle)  -- Invertir el ángulo para el brazo izquierdo
+	runService.Heartbeat:Connect(function(dt)
+		local direction = humanoidRootPart.CFrame:VectorToObjectSpace(humanoid.MoveDirection)
+		local momentum = humanoidRootPart.CFrame:VectorToObjectSpace(humanoidRootPart.Velocity)*MOMENTUM_FACTOR
+		momentum = Vector3.new(
+			math.clamp(math.abs(momentum.X), MIN_MOMENTUM, MAX_MOMENTUM),
+			0,
+			math.clamp(math.abs(momentum.Z), MIN_MOMENTUM, MAX_MOMENTUM)
+		)
 
-        -- Actualizamos el cuello
-        Neck.C0 = NeckC0 * CFrame.Angles(angle, 0, 0)  -- Invertir el ángulo para el cuello
-    end)
-end
+		local x = direction.X*momentum.X
+		local z = direction.Z*momentum.Z
 
-Owner.CharacterAdded:Connect(setupCharacter)
-if Owner.Character then
-    setupCharacter(Owner.Character)
-end
+		local angles = nil
+		if humanoid.RigType == Enum.HumanoidRigType.R15 then
+			angles = {z, 0, -x}
+		else
+			angles = {-z, -x, 0}
+		end
 
+		m6d.C0 = m6d.C0:Lerp(originalM6dC0*CFrame.Angles(unpack(angles)), dt*SPEED)
+	end)
+end)
 ]])
+
+NLS([[
+    local Players = game:GetService("Players")
+    local plr = Players.LocalPlayer
+    local char = plr.Character or plr.CharacterAdded:Wait()
+    local mouse = plr:GetMouse()
+    local name = plr.Name
+    local mainFolder = game:GetService("LocalizationService"):WaitForChild(name .. "'s MainFolder")
+    local remote = mainFolder:WaitForChild("RemoteEvent")
+    print("Remote found")
+    mouse.Button1Down:Connect(function()
+        remote:FireServer()
+    end)
+]])
+
 
 -- Crear y configurar AnimationTracks usando AnimationTrack.new()
 local idleTrack = AnimationTrack.new()
