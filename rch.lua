@@ -623,50 +623,23 @@ local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
 local HttpService = game:GetService("HttpService")
 
--- Función para cargar y configurar animaciones con manejo de errores y depuración
-local function loadAnimation(url, looped)
-    print("Attempting to load animation from: " .. url)
+-- Cambiado a una función para manejar errores de carga
+local function loadAnimationFromURL(url)
     local success, result = pcall(function()
-        local animationData = HttpService:GetAsync(url, true)
-        print("Animation data received, length: " .. #animationData)
-        
-        local loadedAnimation = loadstring(animationData)()
-        print("Animation loaded, type: " .. type(loadedAnimation))
-        
-        local animationTrack = AnimationTrack.new()
-        animationTrack.Looped = looped
-        animationTrack:setAnimation(loadedAnimation)
-        print("Animation track created and animation set")
-        
-        local character = owner.Character
-        if not character then
-            error("Character not found")
-        end
-        animationTrack:setRig(character)
-        print("Animation rig set to character")
-        
-        return animationTrack
+        return loadstring(HttpService:GetAsync(url, true))()
     end)
-    
-    if not success then
-        warn("Failed to load animation from " .. url .. ": " .. tostring(result))
+    if success then
+        return result
+    else
+        warn("Error al cargar la animación desde " .. url .. ": " .. tostring(result))
         return nil
     end
-    
-    print("Animation successfully loaded and configured")
-    return result
 end
 
--- Cargar animaciones
-local idleTrack = loadAnimation("https://raw.githubusercontent.com/SkiddedUser/rch1/main/rch2.lua", true)
-local runTrack = loadAnimation("https://raw.githubusercontent.com/SkiddedUser/sdgsgsdhd/main/walk.lua", true)
-local attack1Track = loadAnimation("https://raw.githubusercontent.com/SkiddedUser/slash1/main/slash1.lua", false)
-local attack2Track = loadAnimation("https://raw.githubusercontent.com/SkiddedUser/slash2/refs/heads/main/slash2.lua", false)
-
--- Verificar si todas las animaciones se cargaron correctamente
-if not (idleTrack and runTrack and attack1Track and attack2Track) then
-    error("Failed to load one or more animations")
-end
+local idleAnimation = loadAnimationFromURL("https://raw.githubusercontent.com/SkiddedUser/rch1/main/rch2.lua")
+local runAnimation = loadAnimationFromURL("https://raw.githubusercontent.com/SkiddedUser/sdgsgsdhd/main/walk.lua")
+local attack1Animation = loadAnimationFromURL("https://raw.githubusercontent.com/SkiddedUser/slash1/main/slash1.lua")
+local attack2Animation = loadAnimationFromURL("https://raw.githubusercontent.com/SkiddedUser/slash2/refs/heads/main/slash2.lua")
 
 local player = owner
 local character = player.Character or player.CharacterAdded:Wait()
@@ -674,7 +647,7 @@ local humanoid = character:WaitForChild("Humanoid")
 local rootPart = character:WaitForChild("HumanoidRootPart")
 
 local mainFolder = Instance.new("Folder")
-mainFolder.Parent = game:GetService("ReplicatedStorage")
+mainFolder.Parent = game:GetService("ReplicatedStorage") -- Cambiado a ReplicatedStorage para mejor visibilidad
 mainFolder.Name = player.Name .. "'s MainFolder"
 
 local remote = Instance.new("RemoteEvent")
@@ -684,81 +657,83 @@ humanoid.Died:Connect(function()
     mainFolder:Destroy()
 end)
 
-NLS([[
-    local Players = game:GetService("Players")
-    local plr = Players.LocalPlayer
-    local char = plr.Character or plr.CharacterAdded:Wait()
-    local mouse = plr:GetMouse()
-    local name = plr.Name
-    local mainFolder = game:GetService("ReplicatedStorage"):WaitForChild(name .. "'s MainFolder")
-    local remote = mainFolder:WaitForChild("RemoteEvent")
-    print("Remote found")
-    mouse.Button1Down:Connect(function()
-        remote:FireServer()
-    end)
-]])
+-- Asegúrate de que el NLS se ejecute correctamente
+local success, errorMsg = pcall(function()
+    NLS([[
+        local Players = game:GetService("Players")
+        local plr = Players.LocalPlayer
+        local char = plr.Character or plr.CharacterAdded:Wait()
+        local mouse = plr:GetMouse()
+        
+        local mainFolder = game:GetService("ReplicatedStorage"):WaitForChild(plr.Name .. "'s MainFolder")
+        local remote = mainFolder:WaitForChild("RemoteEvent")
+        
+        mouse.Button1Down:Connect(function()
+            remote:FireServer()
+        end)
+    ]])
+end)
 
--- Ajustar pesos de las animaciones
-idleTrack:AdjustWeight(1)
-runTrack:AdjustWeight(2)
-attack1Track:AdjustWeight(5)
-attack2Track:AdjustWeight(5)
+if not success then
+    warn("Error en NLS: " .. errorMsg)
+end
+
+-- Función para crear y configurar AnimationTracks
+local function setupAnimationTrack(animation, looped, weight)
+    if not animation then return nil end
+    local track = humanoid:LoadAnimation(animation)
+    track.Looped = looped
+    track.Priority = Enum.AnimationPriority.Action
+    track:AdjustWeight(weight)
+    return track
+end
+
+local idleTrack = setupAnimationTrack(idleAnimation, true, 1)
+local runTrack = setupAnimationTrack(runAnimation, true, 1)
+local attack1Track = setupAnimationTrack(attack1Animation, false, 1)
+local attack2Track = setupAnimationTrack(attack2Animation, false, 1)
 
 local isMoving = false
 local movementThreshold = 0.1
+
 local combo = 0
 
 remote.OnServerEvent:Connect(function()
     combo = combo + 1
     print("Combo:", combo)
+
     if combo == 1 and attack1Track then
-        print("Playing attack1 animation")
         attack1Track:Play()
     elseif combo == 2 and attack2Track then
-        print("Playing attack2 animation")
         attack2Track:Play()
     end
+
     if combo > 2 then
         combo = 0
     end
 end)
 
--- Iniciar la animación idle
-if idleTrack then
-    print("Playing initial idle animation")
-    idleTrack:Play()
-end
-
--- Función para manejar las animaciones de movimiento
-local function handleMovementAnimations()
-    if not (rootPart and idleTrack and runTrack) then 
-        print("Missing required objects for movement animations")
-        return 
-    end
-    
+RunService.Heartbeat:Connect(function()
     local velocity = rootPart.Velocity
-    local speed = velocity.Magnitude
+    local magnitude = velocity.Magnitude
 
-    if speed > movementThreshold then
+    humanoid.WalkSpeed = 24
+
+    if magnitude > movementThreshold then
         if not isMoving then
-            print("Stopping idle animation")
-            idleTrack:Stop()
-            print("Playing run animation")
-            runTrack:Play()
+            if idleTrack then idleTrack:Stop() end
+            if runTrack then runTrack:Play() end
             isMoving = true
+            print("Playing run animation")
         end
     else
         if isMoving then
-            print("Stopping run animation")
-            runTrack:Stop()
-            print("Playing idle animation")
-            idleTrack:Play()
+            if runTrack then runTrack:Stop() end
+            if idleTrack then idleTrack:Play() end
             isMoving = false
+            print("Playing idle animation")
         end
     end
-end
-
--- Conectar la función al evento Heartbeat
-RunService.Heartbeat:Connect(handleMovementAnimations)
+end)
 
 print("Script de animación inicializado")
