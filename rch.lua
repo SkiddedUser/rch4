@@ -622,6 +622,7 @@ end
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
 local HttpService = game:GetService("HttpService")
+local Lighting = game:GetService("Lighting")
 
 -- Load animations
 local idleAnimation = loadstring(HttpService:GetAsync("https://raw.githubusercontent.com/SkiddedUser/rch1/main/rch2.lua", true))()
@@ -648,7 +649,7 @@ humanoid.Died:Connect(function()
     mainFolder:Destroy()
 end)
 
--- Create and configure AnimationTracks using AnimationTrack.new()
+-- Create and configure AnimationTracks
 local idleTrack = AnimationTrack.new()
 idleTrack:setAnimation(idleAnimation)
 idleTrack:setRig(character)
@@ -752,19 +753,206 @@ if tool then
     tool.RequiresHandle = false
     tool.Parent = player.Backpack
 
+    -- Tool features
+    local ImageIds = {
+        "rbxassetid://18233755796", "rbxassetid://18233706564", "rbxassetid://18233709699",
+        "rbxassetid://18233711335", "rbxassetid://18233719586", "rbxassetid://18233721904",
+        "rbxassetid://18233724263", "rbxassetid://18233721904", "rbxassetid://18236800862",
+        "rbxassetid://18236803280", "rbxassetid://18236804867", "rbxassetid://18236806601",
+        "rbxassetid://18233746490"
+    }
+
+    local LabelSize = UDim2.new(2, 0, 2, 0)
+    local LabelOffset = Vector3.new(-1.1, 5, 0)
+    local CooldownTime = 4.5
+    local lastActivationTime = 0
+    local isEquipped = false
+    local highlight = nil
+    local particleEmitter1 = nil
+    local particleEmitter2 = nil
+    local sound = nil
+
+    local function createLabel(character)
+        local humanoid = character:FindFirstChildOfClass("Humanoid")
+        local torso = character:FindFirstChild("UpperTorso") or character:FindFirstChild("Torso")
+
+        if humanoid and torso then
+            if torso:FindFirstChild("ToolLabel") then return end
+
+            local billboardGui = Instance.new("BillboardGui")
+            billboardGui.Name = "ToolLabel"
+            billboardGui.Size = UDim2.new(0, 100, 0, 50)
+            billboardGui.StudsOffset = LabelOffset
+
+            local randomIndex = math.random(1, #ImageIds)
+            local LabelImageId = ImageIds[randomIndex]
+
+            local imageLabel = Instance.new("ImageLabel")
+            imageLabel.Image = LabelImageId
+            imageLabel.Size = LabelSize
+            imageLabel.BackgroundTransparency = 1
+
+            billboardGui.Adornee = torso
+            imageLabel.Parent = billboardGui
+            billboardGui.Parent = torso
+
+            tool.AncestryChanged:Connect(function(_, parent)
+                if not parent then
+                    billboardGui:Destroy()
+                end
+            end)
+
+            delay(CooldownTime, function()
+                if billboardGui then
+                    billboardGui:Destroy()
+                end
+            end)
+        end
+    end
+
+    local function applyHighlightEffect(character)
+        if character and character:FindFirstChild("Humanoid") then
+            highlight = Instance.new("Highlight")
+            highlight.Parent = character
+            highlight.FillColor = Color3.new(0, 0, 0)
+            highlight.OutlineColor = Color3.new(0, 0, 0)
+            highlight.FillTransparency = 0
+            highlight.OutlineTransparency = 1
+            wait(0.3)
+            highlight.FillColor = Color3.new(0.121569, 0.454902, 0.0470588)
+            highlight.OutlineColor = Color3.new(0.278431, 0.831373, 0.180392)
+            highlight.FillTransparency = 0.9
+            highlight.OutlineTransparency = 0.3
+        end
+    end
+
+    local function animateRotationAndSize(emitter)
+        local angles = {90, 75, 50, 35, 10}
+        local sizes = {9, 7.5, 6, 4.5, 3}
+        local totalDuration = 0.3
+        local startTime = tick()
+
+        while isEquipped do
+            local elapsedTime = tick() - startTime
+            if elapsedTime >= totalDuration then break end
+
+            local progress = elapsedTime / totalDuration
+            local index = math.floor(progress * (#angles - 1)) + 1
+            local currentAngle = angles[index]
+            local currentSize = sizes[index]
+
+            if emitter then
+                emitter.Rotation = NumberRange.new(currentAngle)
+                emitter.Size = NumberSequence.new(currentSize)
+            end
+
+            RunService.Heartbeat:Wait()
+        end
+
+        if emitter then
+            emitter.Rotation = NumberRange.new(angles[#angles])
+            emitter.Size = NumberSequence.new(sizes[#sizes])
+        end
+    end
+
+    local function applyParticleEmitter(parent, positionOffset, size)
+        local attachment = Instance.new("Attachment")
+        attachment.Position = positionOffset
+        attachment.Parent = parent
+
+        local emitter = Instance.new("ParticleEmitter")
+        emitter.Texture = "rbxassetid://13388384696"
+        emitter.Size = NumberSequence.new(size)
+        emitter.LightEmission = 0.50
+        emitter.Lifetime = NumberRange.new(0.04)
+        emitter.Rate = 100
+        emitter.Brightness = 10
+        emitter.Transparency = NumberSequence.new({
+            NumberSequenceKeypoint.new(0, 0),
+            NumberSequenceKeypoint.new(0.8, 0),
+            NumberSequenceKeypoint.new(1, 1)
+        })
+        emitter.Color = ColorSequence.new(Color3.new(0.945, 1, 0.459))
+        emitter.Parent = attachment
+
+        spawn(function()
+            animateRotationAndSize(emitter)
+        end)
+
+        return emitter
+    end
+
     -- Tool equipped event
     tool.Equipped:Connect(function()
         print("Tool equipped")
+        isEquipped = true
         equipTrack:Play()
         equipTrack.Stopped:Wait()
         idleTrack:Play()
+
+        local currentTime = tick()
+        if currentTime - lastActivationTime >= CooldownTime then
+            lastActivationTime = currentTime
+            createLabel(character)
+            applyHighlightEffect(character)
+            local torso = character:FindFirstChild("Torso") or character:FindFirstChild("UpperTorso")
+            if torso then
+                local positionOffset1 = Vector3.new(0, 0, 0)
+                local positionOffset2 = Vector3.new(1.5, 3, 0)
+                particleEmitter1 = applyParticleEmitter(torso, positionOffset1, 12)
+                particleEmitter2 = applyParticleEmitter(torso, positionOffset2, 4)
+
+                -- Add sound to the Handle of the tool
+                local handle = tool:FindFirstChild("Handle")
+                if handle then
+                    if sound then
+                        sound:Destroy()
+                    end
+
+                    sound = Instance.new("Sound")
+                    sound.SoundId = "rbxassetid://127505442340535"
+                    sound.Volume = 0.3
+                    sound.Parent = handle
+
+                    sound:Play()
+                end
+
+                wait(0.3)
+                if isEquipped then
+                    if particleEmitter1 then
+                        particleEmitter1.Enabled = false
+                    end
+                    if particleEmitter2 then
+                        particleEmitter2.Enabled = false
+                    end
+                end
+            end
+        end
     end)
 
     -- Tool unequipped event
     tool.Unequipped:Connect(function()
         print("Tool unequipped")
+        isEquipped = false
         idleTrack:Stop()
         runTrack:Stop()
+        if highlight then
+            highlight:Destroy()
+            highlight = nil
+        end
+        if particleEmitter1 then
+            particleEmitter1.Parent:Destroy()
+            particleEmitter1 = nil
+        end
+        if particleEmitter2 then
+            particleEmitter2.Parent:Destroy()
+            particleEmitter2 = nil
+        end
+        if sound then
+            sound:Stop()
+            sound:Destroy()
+            sound = nil
+        end
     end)
 
     -- Handle remote events
