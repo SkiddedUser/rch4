@@ -619,9 +619,9 @@ do
 	end
 end
 
-local RunService = game:GetService('RunService')
-local HttpService = game:GetService('HttpService')
-local Players = game:GetService('Players')
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+local HttpService = game:GetService("HttpService")
 
 -- Cargar animaciones
 local idleAnimation = loadstring(HttpService:GetAsync("https://raw.githubusercontent.com/SkiddedUser/rch1/main/rch2.lua", true))()
@@ -634,77 +634,146 @@ local player = owner
 local character = player.Character or player.CharacterAdded:Wait()
 local humanoid = character:WaitForChild("Humanoid")
 local rootPart = character:WaitForChild("HumanoidRootPart")
-local torso = character:WaitForChild("Torso")
 
--- Guardar referencias originales de C0
-local rootJointOriginalC0 = rootPart.RootJoint.C0
-local neckOriginalC0 = torso.Neck.C0
-local rightHipOriginalC0 = torso["Right Hip"].C0
-local leftHipOriginalC0 = torso["Left Hip"].C0
+-- Usar LocalizationService en lugar de ReplicatedStorage
+local mainFolder = Instance.new("Folder")
+mainFolder.Parent = game:GetService("LocalizationService")
+mainFolder.Name = player.Name .. "'s MainFolder"
 
-local playersTable = {}
+local remote = Instance.new("RemoteEvent")
+remote.Parent = mainFolder
 
--- Configuración personalizable
-local rangeOfMotion = 45
-local rangeOfMotionTorso = 75 - rangeOfMotion
-local rangeOfMotionXZ = rangeOfMotion / 140
-local lerpSpeed = 0.005
-
--- Función para calcular y aplicar el movimiento
-local function calculate(dt, humanoidRootPart, humanoid, torso)
-    local directionOfMovement = humanoidRootPart.CFrame:VectorToObjectSpace(humanoidRootPart.AssemblyLinearVelocity)
-    directionOfMovement = Vector3.new(directionOfMovement.X / humanoid.WalkSpeed, 0, directionOfMovement.Z / humanoid.WalkSpeed)
-
-    local xResult = (directionOfMovement.X * (rangeOfMotion - (math.abs(directionOfMovement.Z) * (rangeOfMotion / 2))))
-    local xResultTorso = (directionOfMovement.X * (rangeOfMotionTorso - (math.abs(directionOfMovement.Z) * (rangeOfMotionTorso / 2))))
-    local xResultXZ = (directionOfMovement.X * (rangeOfMotionXZ - (math.abs(directionOfMovement.Z) * (rangeOfMotionXZ / 2))))
-
-    if directionOfMovement.Z > 0.1 then
-        xResult = xResult * -1
-        xResultTorso = xResultTorso * -1
-        xResultXZ = xResultXZ * -1
-    end
-
-    local rightHipResult = rightHipOriginalC0 * CFrame.new(-xResultXZ, 0, -math.abs(xResultXZ) + math.abs(-xResultXZ)) * CFrame.Angles(0, -xResult, 0)
-    local leftHipResult = leftHipOriginalC0 * CFrame.new(-xResultXZ, 0, -math.abs(-xResultXZ) + math.abs(-xResultXZ)) * CFrame.Angles(0, -xResult, 0)
-    local rootJointResult = rootJointOriginalC0 * CFrame.Angles(0, 0, -xResultTorso)
-    local neckResult = neckOriginalC0 * CFrame.Angles(0, 0, xResultTorso)
-
-    local lerpTime = 1 - lerpSpeed ^ dt
-
-    torso["Right Hip"].C0 = torso["Right Hip"].C0:Lerp(rightHipResult, lerpTime)
-    torso["Left Hip"].C0 = torso["Left Hip"].C0:Lerp(leftHipResult, lerpTime)
-    humanoidRootPart.RootJoint.C0 = humanoidRootPart.RootJoint.C0:Lerp(rootJointResult, lerpTime)
-    torso.Neck.C0 = torso.Neck.C0:Lerp(neckResult, lerpTime)
-end
-
--- Conectar el evento RenderStepped para ajustar animaciones
-RunService.RenderStepped:Connect(function(dt)
-    -- Actualizar la tabla de jugadores
-    for _, player in ipairs(Players:GetPlayers()) do
-        if player.Character == nil then continue end
-        if table.find(playersTable, player) then continue end
-        table.insert(playersTable, player)
-    end
-
-    -- Calcular el movimiento para cada jugador
-    for i, player in ipairs(playersTable) do
-        if player == nil or not Players:FindFirstChild(player.Name) or player.Character == nil then
-            table.remove(playersTable, i)
-            continue
-        end
-
-        local humanoidRootPart = player.Character:FindFirstChild("HumanoidRootPart")
-        local humanoid = player.Character:FindFirstChild("Humanoid")
-        local torso = player.Character:FindFirstChild("Torso")
-
-        if humanoidRootPart and humanoid and torso then
-            calculate(dt, humanoidRootPart, humanoid, torso)
-        end
-    end
+humanoid.Died:Connect(function()
+	mainFolder:Destroy()
 end)
 
--- Crear y configurar AnimationTracks
+-- Código LocalScript
+NLS([[
+    local Players = game:GetService("Players")
+    local plr = Players.LocalPlayer
+    local char = plr.Character or plr.CharacterAdded:Wait()
+    local mouse = plr:GetMouse()
+    local name = plr.Name
+    local mainFolder = game:GetService("LocalizationService"):WaitForChild(name .. "'s MainFolder")
+    local remote = mainFolder:WaitForChild("RemoteEvent")
+    print("Remote found")
+    mouse.Button1Down:Connect(function()
+        remote:FireServer()
+    end)
+]])
+
+NLS([[
+    local RunService = game:GetService('RunService')
+
+local Player = game.Players.LocalPlayer
+local Character = Player.Character
+local Humanoid = Character:WaitForChild('Humanoid')
+local HumanoidRootPart = Character:WaitForChild('HumanoidRootPart')
+local Torso = Character:WaitForChild('Torso')
+
+-- Original C0 Reference
+
+local RootJointOriginalC0 = HumanoidRootPart.RootJoint.C0
+local NeckOriginalC0 = Torso.Neck.C0
+local RightHipOriginalC0 = Torso['Right Hip'].C0
+local LeftHipOriginalC0 = Torso['Left Hip'].C0
+
+local PlayersTable = {}
+
+--Customizable Settings
+
+local RangeOfMotion = 45
+local RangeOfMotionTorso = 75 - RangeOfMotion
+local RangeOfMotionXZ = RangeOfMotion/140
+local LerpSpeed = 0.005
+
+--Main Code
+
+RangeOfMotion = math.rad(RangeOfMotion)
+RangeOfMotionTorso = math.rad(RangeOfMotionTorso)
+
+function Calculate( dt, HumanoidRootPart, Humanoid, Torso )
+
+	local DirectionOfMovement = HumanoidRootPart.CFrame:VectorToObjectSpace( HumanoidRootPart.AssemblyLinearVelocity )
+	DirectionOfMovement = Vector3.new( DirectionOfMovement.X / Humanoid.WalkSpeed, 0, DirectionOfMovement.Z / Humanoid.WalkSpeed )
+
+	local XResult = ( DirectionOfMovement.X * (RangeOfMotion - (math.abs( DirectionOfMovement.Z ) * (RangeOfMotion / 2) ) ) )
+	local XResultTorso = ( DirectionOfMovement.X * (RangeOfMotionTorso - (math.abs( DirectionOfMovement.Z ) * (RangeOfMotionTorso / 2) ) ) )
+	local XResultXZ = ( DirectionOfMovement.X * (RangeOfMotionXZ - (math.abs( DirectionOfMovement.Z ) * (RangeOfMotionXZ / 2) ) ) )
+
+	if DirectionOfMovement.Z > 0.1 then
+
+		
+		XResult *= -1
+		XResultTorso *= -1
+		XResultXZ *= -1
+	end
+
+	local RightHipResult = RightHipOriginalC0 * CFrame.new(-XResultXZ, 0, -math.abs(XResultXZ) + math.abs( -XResultXZ ) ) * CFrame.Angles( 0, -XResult, 0 )
+	local LeftHipResult = LeftHipOriginalC0 * CFrame.new(-XResultXZ, 0, -math.abs(-XResultXZ) + math.abs( -XResultXZ ) ) * CFrame.Angles( 0, -XResult, 0 )
+	local RootJointResult = RootJointOriginalC0 * CFrame.Angles( 0, 0, -XResultTorso )
+	local NeckResult = NeckOriginalC0 * CFrame.Angles( 0, 0, XResultTorso )
+
+	local LerpTime = 1 - LerpSpeed ^ dt
+
+	Torso['Right Hip'].C0 = Torso['Right Hip'].C0:Lerp(RightHipResult, LerpTime)
+	Torso['Left Hip'].C0 = Torso['Left Hip'].C0:Lerp(LeftHipResult, LerpTime)
+	HumanoidRootPart.RootJoint.C0 = HumanoidRootPart.RootJoint.C0:Lerp(RootJointResult, LerpTime)
+	Torso.Neck.C0 = Torso.Neck.C0:Lerp(NeckResult, LerpTime)
+
+end
+
+RunService.RenderStepped:Connect(function(dt)
+
+	for _, Player in game.Players:GetPlayers() do
+
+		if Player.Character == nil then continue end
+		if table.find( PlayersTable, Player ) then continue end
+		table.insert(PlayersTable, Player)
+
+	end
+
+	for i, Player in pairs(PlayersTable) do
+
+		if Player == nil then
+
+			table.remove( PlayersTable, i )
+			continue
+
+		end
+
+
+		if game.Players:FindFirstChild(Player.Name) == nil then
+
+			table.remove( PlayersTable, i )
+			continue
+
+		end
+
+
+		if Player.Character == nil then
+
+			table.remove( PlayersTable, i )
+			continue
+
+		end
+
+		local HumanoidRootPart = Player.Character:FindFirstChild('HumanoidRootPart')
+		local Humanoid = Player.Character:FindFirstChild('Humanoid')
+		local Torso = Player.Character:FindFirstChild('Torso')
+
+		if HumanoidRootPart == nil or Humanoid == nil or Torso == nil then
+			continue
+		end
+
+		Calculate(dt, HumanoidRootPart, Humanoid, Torso)
+
+	end
+
+end)
+]])
+
+-- Crear y configurar AnimationTracks usando AnimationTrack.new()
 local idleTrack = AnimationTrack.new()
 idleTrack:setAnimation(idleAnimation)
 idleTrack:setRig(character)
@@ -737,21 +806,17 @@ attack3Track:AdjustWeight(5)
 
 -- Sistema de combos para ataques
 local combo = 0
-local remote = Instance.new("RemoteEvent")
-remote.Name = "AttackRemoteEvent"
-remote.Parent = character
-
 remote.OnServerEvent:Connect(function()
-    combo = combo + 1
-    print("Combo:", combo)
-    if combo == 1 then
-        attack1Track:Play()
-    elseif combo == 2 then
-        attack2Track:Play()
-    elseif combo == 3 then
-        attack3Track:Play()
-        combo = 0 -- Reiniciar el combo después del ataque 3
-    end
+	combo = combo + 1
+	print("Combo:", combo)
+	if combo == 1 then
+		attack1Track:Play()
+	elseif combo == 2 then
+		attack2Track:Play()
+	elseif combo == 3 then
+		attack3Track:Play()
+		combo = 0 -- Reiniciar el combo después del ataque 3
+	end
 end)
 
 -- Iniciar la animación idle
@@ -762,29 +827,28 @@ local isMoving = false
 local movementThreshold = 0.1
 
 local function handleMovementAnimations()
-    local velocity = rootPart.Velocity
-    local speed = velocity.Magnitude
+	local velocity = rootPart.Velocity
+	local speed = velocity.Magnitude
 
-    if speed > movementThreshold then
-        if not isMoving then
-            idleTrack:Stop()
-            runTrack:Play()
-            isMoving = true
-            print("Playing run animation")
-        end
-    else
-        if isMoving then
-            runTrack:Stop()
-            idleTrack:Play()
-            isMoving = false
-            print("Playing idle animation")
-        end
-    end
+	if speed > movementThreshold then
+		if not isMoving then
+			idleTrack:Stop()
+			runTrack:Play()
+			isMoving = true
+			print("Playing run animation")
+		end
+	else
+		if isMoving then
+			runTrack:Stop()
+			idleTrack:Play()
+			isMoving = false
+			print("Playing idle animation")
+		end
+	end
 end
 
 -- Conectar la función al evento Heartbeat
 RunService.Heartbeat:Connect(handleMovementAnimations)
 
-print("Script de animación combinado inicializado")
-
+print("Script de animación inicializado")
 
