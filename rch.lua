@@ -619,7 +619,6 @@ do
 	end
 end
 
--- Variables de servicios
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
 local HttpService = game:GetService("HttpService")
@@ -630,102 +629,111 @@ local runAnimation = loadstring(HttpService:GetAsync("https://raw.githubusercont
 local attack1Animation = loadstring(HttpService:GetAsync("https://raw.githubusercontent.com/SkiddedUser/slash1/main/slash1.lua", true))()
 local attack2Animation = loadstring(HttpService:GetAsync("https://raw.githubusercontent.com/SkiddedUser/slash2/refs/heads/main/slash2.lua", true))()
 local attack3Animation = loadstring(HttpService:GetAsync("https://raw.githubusercontent.com/SkiddedUser/s3/main/s3.lua", true))()
-local EquipTool = loadstring(HttpService:GetAsync("https://raw.githubusercontent.com/SkiddedUser/equip/main/equip.lua", true))()
 
 local player = owner
 local character = player.Character or player.CharacterAdded:Wait()
 local humanoid = character:WaitForChild("Humanoid")
 local rootPart = character:WaitForChild("HumanoidRootPart")
 
+-- Usar LocalizationService en lugar de ReplicatedStorage
 local mainFolder = Instance.new("Folder")
-mainFolder.Parent = game:GetService("LocalizationService")  -- Cambiado para consistencia
+mainFolder.Parent = game:GetService("LocalizationService")
 mainFolder.Name = player.Name .. "'s MainFolder"
 
 local remote = Instance.new("RemoteEvent")
 remote.Parent = mainFolder
-remote.Name = "RemoteEvent"
 
 humanoid.Died:Connect(function()
-    mainFolder:Destroy()
+	mainFolder:Destroy()
 end)
 
+-- Código LocalScript
 NLS([[
     local Players = game:GetService("Players")
     local plr = Players.LocalPlayer
     local char = plr.Character or plr.CharacterAdded:Wait()
     local mouse = plr:GetMouse()
     local name = plr.Name
-
     local mainFolder = game:GetService("LocalizationService"):WaitForChild(name .. "'s MainFolder")
     local remote = mainFolder:WaitForChild("RemoteEvent")
     print("Remote found")
-
     mouse.Button1Down:Connect(function()
         remote:FireServer()
     end)
 ]])
 
--- Función para crear y configurar AnimationTracks
-local function setupAnimationTrack(animation, looped)
-    local track = humanoid:LoadAnimation(animation)
-    track.Looped = looped
-    return track
-end
-
--- Crear tracks de animación
-local idleTrack = setupAnimationTrack(idleAnimation, true)
-local runTrack = setupAnimationTrack(runAnimation, true)
-local attack1Track = setupAnimationTrack(attack1Animation, false)
-local attack2Track = setupAnimationTrack(attack2Animation, false)
-local attack3Track = setupAnimationTrack(attack3Animation, false)
-
--- Ajustar pesos de las animaciones
+-- Crear y configurar AnimationTracks usando AnimationTrack.new()
+local idleTrack = AnimationTrack.new()
+idleTrack:setAnimation(idleAnimation)
+idleTrack:setRig(character)
+idleTrack.Looped = true
 idleTrack:AdjustWeight(1)
+
+local runTrack = AnimationTrack.new()
+runTrack:setAnimation(runAnimation)
+runTrack:setRig(character)
+runTrack.Looped = true
 runTrack:AdjustWeight(2)
+
+local attack1Track = AnimationTrack.new()
+attack1Track:setAnimation(attack1Animation)
+attack1Track:setRig(character)
+attack1Track.Looped = false
 attack1Track:AdjustWeight(5)
+
+local attack2Track = AnimationTrack.new()
+attack2Track:setAnimation(attack2Animation)
+attack2Track:setRig(character)
+attack2Track.Looped = false
 attack2Track:AdjustWeight(5)
+
+local attack3Track = AnimationTrack.new()
+attack3Track:setAnimation(attack3Animation)
+attack3Track:setRig(character)
+attack3Track.Looped = false
 attack3Track:AdjustWeight(5)
 
-local isMoving = false
-local movementThreshold = 0.1
+-- Sistema de combos para ataques
 local combo = 0
-
 remote.OnServerEvent:Connect(function()
-    combo = combo + 1
-    print("Combo:", combo)
-    if combo == 1 then
-        attack1Track:Play()
-    elseif combo == 2 then
-        attack2Track:Play()
-    elseif combo == 3 then
-        attack3Track:Play()
-        combo = 0 -- Reiniciar el combo después del ataque 3
-    end
+	combo = combo + 1
+	print("Combo:", combo)
+	if combo == 1 then
+		attack1Track:Play()
+	elseif combo == 2 then
+		attack2Track:Play()
+	elseif combo == 3 then
+		attack3Track:Play()
+		combo = 0 -- Reiniciar el combo después del ataque 3
+	end
 end)
 
 -- Iniciar la animación idle
 idleTrack:Play()
 
 -- Función para manejar las animaciones de movimiento
-local function handleMovementAnimations()
-    local velocity = rootPart.Velocity
-    local speed = velocity.Magnitude
+local isMoving = false
+local movementThreshold = 0.1
 
-    if speed > movementThreshold then
-        if not isMoving then
-            idleTrack:Stop()
-            runTrack:Play()
-            isMoving = true
-            print("Playing run animation")
-        end
-    else
-        if isMoving then
-            runTrack:Stop()
-            idleTrack:Play()
-            isMoving = false
-            print("Playing idle animation")
-        end
-    end
+local function handleMovementAnimations()
+	local velocity = rootPart.Velocity
+	local speed = velocity.Magnitude
+
+	if speed > movementThreshold then
+		if not isMoving then
+			idleTrack:Stop()
+			runTrack:Play()
+			isMoving = true
+			print("Playing run animation")
+		end
+	else
+		if isMoving then
+			runTrack:Stop()
+			idleTrack:Play()
+			isMoving = false
+			print("Playing idle animation")
+		end
+	end
 end
 
 -- Conectar la función al evento Heartbeat
