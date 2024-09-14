@@ -663,114 +663,91 @@ NLS([[
 ]])
 
 NLS([[
-    local RunService = game:GetService('RunService')
+    local uis = game:GetService("UserInputService")
+local rs = game:GetService("RunService")
+local Players = game:GetService("Players")
+local player = Players.LocalPlayer
+local camera = workspace.CurrentCamera
+local char = player.Character or player.CharacterAdded:Wait()
+local humanoid = char:WaitForChild("Humanoid")
+local hrp = char:WaitForChild("HumanoidRootPart")
 
-local Player = game.Players.LocalPlayer
-local Character = Player.Character
-local Humanoid = Character:WaitForChild('Humanoid')
-local HumanoidRootPart = Character:WaitForChild('HumanoidRootPart')
-local Torso = Character:WaitForChild('Torso')
+local shiftLockEnabled = false
+local x = 0
+local y = 0
+local offset = Vector3.new(3, 3, 10)
 
--- Original C0 Reference
+local walking = false
+local walkanimcf = CFrame.new()
 
-local RootJointOriginalC0 = HumanoidRootPart.RootJoint.C0
-local NeckOriginalC0 = Torso.Neck.C0
-local RightHipOriginalC0 = Torso['Right Hip'].C0
-local LeftHipOriginalC0 = Torso['Left Hip'].C0
-
-local PlayersTable = {}
-
---Customizable Settings
-
-local RangeOfMotion = 45
-local RangeOfMotionTorso = 75 - RangeOfMotion
-local RangeOfMotionXZ = RangeOfMotion/140
-local LerpSpeed = 0.005
-
---Main Code
-
-RangeOfMotion = math.rad(RangeOfMotion)
-RangeOfMotionTorso = math.rad(RangeOfMotionTorso)
-
-function Calculate( dt, HumanoidRootPart, Humanoid, Torso )
-
-	local DirectionOfMovement = HumanoidRootPart.CFrame:VectorToObjectSpace( HumanoidRootPart.AssemblyLinearVelocity )
-	DirectionOfMovement = Vector3.new( DirectionOfMovement.X / Humanoid.WalkSpeed, 0, DirectionOfMovement.Z / Humanoid.WalkSpeed )
-
-	local XResult = ( DirectionOfMovement.X * (RangeOfMotion - (math.abs( DirectionOfMovement.Z ) * (RangeOfMotion / 2) ) ) )
-	local XResultTorso = ( DirectionOfMovement.X * (RangeOfMotionTorso - (math.abs( DirectionOfMovement.Z ) * (RangeOfMotionTorso / 2) ) ) )
-	local XResultXZ = ( DirectionOfMovement.X * (RangeOfMotionXZ - (math.abs( DirectionOfMovement.Z ) * (RangeOfMotionXZ / 2) ) ) )
-
-	if DirectionOfMovement.Z > 0.1 then
-
-		
-		XResult *= -1
-		XResultTorso *= -1
-		XResultXZ *= -1
+-- Function to update camera position
+local function updateCamera()
+	if shiftLockEnabled then
+		local startCFrame = CFrame.new((hrp.CFrame.Position)) * CFrame.Angles(0, math.rad(x), 0) * CFrame.Angles(math.rad(y), 0, 0)
+		local cameraCFrame = startCFrame:ToWorldSpace(CFrame.new(offset.X, offset.Y, offset.Z))
+		local cameraDirection = startCFrame:ToWorldSpace(CFrame.new(offset.X, offset.Y, -10000))
+		camera.CFrame = CFrame.new(cameraCFrame.Position, cameraDirection.Position)
 	end
-
-	local RightHipResult = RightHipOriginalC0 * CFrame.new(-XResultXZ, 0, -math.abs(XResultXZ) + math.abs( -XResultXZ ) ) * CFrame.Angles( 0, -XResult, 0 )
-	local LeftHipResult = LeftHipOriginalC0 * CFrame.new(-XResultXZ, 0, -math.abs(-XResultXZ) + math.abs( -XResultXZ ) ) * CFrame.Angles( 0, -XResult, 0 )
-	local RootJointResult = RootJointOriginalC0 * CFrame.Angles( 0, 0, -XResultTorso )
-	local NeckResult = NeckOriginalC0 * CFrame.Angles( 0, 0, XResultTorso )
-
-	local LerpTime = 1 - LerpSpeed ^ dt
-
-	Torso['Right Hip'].C0 = Torso['Right Hip'].C0:Lerp(RightHipResult, LerpTime)
-	Torso['Left Hip'].C0 = Torso['Left Hip'].C0:Lerp(LeftHipResult, LerpTime)
-	HumanoidRootPart.RootJoint.C0 = HumanoidRootPart.RootJoint.C0:Lerp(RootJointResult, LerpTime)
-	Torso.Neck.C0 = Torso.Neck.C0:Lerp(NeckResult, LerpTime)
-
 end
 
-RunService.RenderStepped:Connect(function(dt)
-
-	for _, Player in game.Players:GetPlayers() do
-
-		if Player.Character == nil then continue end
-		if table.find( PlayersTable, Player ) then continue end
-		table.insert(PlayersTable, Player)
-
+-- Function to toggle shift lock
+local function toggleShiftLock()
+	shiftLockEnabled = not shiftLockEnabled
+	if shiftLockEnabled then
+		camera.CameraType = Enum.CameraType.Scriptable
+		uis.MouseBehavior = Enum.MouseBehavior.LockCenter
+		humanoid.AutoRotate = false
+	else
+		camera.CameraType = Enum.CameraType.Custom
+		uis.MouseBehavior = Enum.MouseBehavior.Default
+		humanoid.AutoRotate = true
 	end
+end
 
-	for i, Player in pairs(PlayersTable) do
-
-		if Player == nil then
-
-			table.remove( PlayersTable, i )
-			continue
-
-		end
-
-
-		if game.Players:FindFirstChild(Player.Name) == nil then
-
-			table.remove( PlayersTable, i )
-			continue
-
-		end
-
-
-		if Player.Character == nil then
-
-			table.remove( PlayersTable, i )
-			continue
-
-		end
-
-		local HumanoidRootPart = Player.Character:FindFirstChild('HumanoidRootPart')
-		local Humanoid = Player.Character:FindFirstChild('Humanoid')
-		local Torso = Player.Character:FindFirstChild('Torso')
-
-		if HumanoidRootPart == nil or Humanoid == nil or Torso == nil then
-			continue
-		end
-
-		Calculate(dt, HumanoidRootPart, Humanoid, Torso)
-
+-- Handle input changes
+uis.InputChanged:Connect(function(input, processed)
+	if processed then return end
+	if input.UserInputType == Enum.UserInputType.MouseMovement and shiftLockEnabled then
+		x = x - input.Delta.X
+		y = math.clamp(y - input.Delta.Y * 0.4, -75, 75)
+		hrp.CFrame = CFrame.new(hrp.Position) * CFrame.Angles(0, math.rad(x), 0)
 	end
-
 end)
+
+-- Handle key press to toggle shift lock
+uis.InputBegan:Connect(function(input, processed)
+	if processed then return end
+	if input.KeyCode == Enum.KeyCode.LeftControl or input.KeyCode == Enum.KeyCode.RightShift then
+		toggleShiftLock()
+	end
+end)
+
+-- Update camera every frame
+rs.RenderStepped:Connect(function()
+	updateCamera()
+
+	-- CameraBobbing effect
+	if walking then
+		local speed = humanoid.WalkSpeed / 8
+		local bobbingIntensity = 0.02
+		local frequency = 8
+		local offset = Vector3.new(0.02 * math.sin(tick() * frequency), 0.01 * math.sin(tick() * (frequency * 2)), 0)
+		walkanimcf = walkanimcf:lerp(CFrame.new(offset) * CFrame.Angles(0, 0, 0.005 * math.sin(tick() * frequency)), 0.2)
+	else
+		walkanimcf = walkanimcf:lerp(CFrame.new(), 0.1)
+	end
+	camera.CFrame = camera.CFrame * walkanimcf
+end)
+
+-- Handle humanoid running to detect walking
+humanoid.Running:Connect(function(s)
+	if s > 0.1 then
+		walking = true
+	else
+		walking = false
+	end
+end)
+
 ]])
 
 -- Crear y configurar AnimationTracks usando AnimationTrack.new()
