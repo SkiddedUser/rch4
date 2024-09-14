@@ -632,50 +632,44 @@ local attack2Animation = loadstring(HttpService:GetAsync("https://raw.githubuser
 local attack3Animation = loadstring(HttpService:GetAsync("https://raw.githubusercontent.com/SkiddedUser/s3/main/s3.lua", true))()
 local EquipTool = loadstring(HttpService:GetAsync("https://raw.githubusercontent.com/SkiddedUser/equip/main/equip.lua", true))()
 
--- Referencias al jugador y su personaje
 local player = owner
 local character = player.Character or player.CharacterAdded:Wait()
 local humanoid = character:WaitForChild("Humanoid")
 local rootPart = character:WaitForChild("HumanoidRootPart")
 
--- Crear una carpeta para almacenar eventos remotos
 local mainFolder = Instance.new("Folder")
-mainFolder.Parent = game:GetService("ReplicatedStorage")
+mainFolder.Parent = game:GetService("LocalizationService")  -- Cambiado para consistencia
 mainFolder.Name = player.Name .. "'s MainFolder"
 
--- Crear el evento remoto
 local remote = Instance.new("RemoteEvent")
-remote.Name = "RemoteEvent"
 remote.Parent = mainFolder
+remote.Name = "RemoteEvent"
 
--- Destruir la carpeta cuando el humanoide muera
 humanoid.Died:Connect(function()
-	mainFolder:Destroy()
+    mainFolder:Destroy()
 end)
 
--- LocalScript para manejar el clic del mouse en el cliente
 NLS([[
     local Players = game:GetService("Players")
     local plr = Players.LocalPlayer
     local char = plr.Character or plr.CharacterAdded:Wait()
     local mouse = plr:GetMouse()
     local name = plr.Name
-    local mainFolder = game:GetService("ReplicatedStorage"):WaitForChild(name .. "'s MainFolder")
+
+    local mainFolder = game:GetService("LocalizationService"):WaitForChild(name .. "'s MainFolder")
     local remote = mainFolder:WaitForChild("RemoteEvent")
-    
     print("Remote found")
-    
-    -- Detectar clic izquierdo del mouse y enviar un evento al servidor
+
     mouse.Button1Down:Connect(function()
         remote:FireServer()
     end)
-]], player.Backpack) -- Asignar el LocalScript al Backpack para que se ejecute correctamente
+]])
 
 -- Función para crear y configurar AnimationTracks
 local function setupAnimationTrack(animation, looped)
-	local track = humanoid:LoadAnimation(animation)
-	track.Looped = looped
-	return track
+    local track = humanoid:LoadAnimation(animation)
+    track.Looped = looped
+    return track
 end
 
 -- Crear tracks de animación
@@ -696,18 +690,17 @@ local isMoving = false
 local movementThreshold = 0.1
 local combo = 0
 
--- Manejar el evento remoto para ataques
 remote.OnServerEvent:Connect(function()
-	combo = combo + 1
-	print("Combo:", combo)
-	if combo == 1 then
-		attack1Track:Play()
-	elseif combo == 2 then
-		attack2Track:Play()
-	elseif combo == 3 then
-		attack3Track:Play()
-		combo = 0 -- Reiniciar el combo después del ataque 3
-	end
+    combo = combo + 1
+    print("Combo:", combo)
+    if combo == 1 then
+        attack1Track:Play()
+    elseif combo == 2 then
+        attack2Track:Play()
+    elseif combo == 3 then
+        attack3Track:Play()
+        combo = 0 -- Reiniciar el combo después del ataque 3
+    end
 end)
 
 -- Iniciar la animación idle
@@ -715,24 +708,24 @@ idleTrack:Play()
 
 -- Función para manejar las animaciones de movimiento
 local function handleMovementAnimations()
-	local velocity = rootPart.Velocity
-	local speed = velocity.Magnitude
+    local velocity = rootPart.Velocity
+    local speed = velocity.Magnitude
 
-	if speed > movementThreshold then
-		if not isMoving then
-			idleTrack:Stop()
-			runTrack:Play()
-			isMoving = true
-			print("Playing run animation")
-		end
-	else
-		if isMoving then
-			runTrack:Stop()
-			idleTrack:Play()
-			isMoving = false
-			print("Playing idle animation")
-		end
-	end
+    if speed > movementThreshold then
+        if not isMoving then
+            idleTrack:Stop()
+            runTrack:Play()
+            isMoving = true
+            print("Playing run animation")
+        end
+    else
+        if isMoving then
+            runTrack:Stop()
+            idleTrack:Play()
+            isMoving = false
+            print("Playing idle animation")
+        end
+    end
 end
 
 -- Conectar la función al evento Heartbeat
@@ -740,5 +733,3 @@ RunService.Heartbeat:Connect(handleMovementAnimations)
 
 print("Script de animación inicializado")
 
-
-print("Script de animación inicializado")
