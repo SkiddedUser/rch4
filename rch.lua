@@ -623,114 +623,118 @@ local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
 local HttpService = game:GetService("HttpService")
 
-local idleAnimation = loadstring(HttpService:GetAsync("https://raw.githubusercontent.com/SkiddedUser/rch1/main/rch2.lua", true))()
-local runAnimation = loadstring(HttpService:GetAsync("https://raw.githubusercontent.com/SkiddedUser/sdgsgsdhd/main/walk.lua", true))()
+-- Cambiado a una función para manejar errores de carga
+local function loadAnimationFromURL(url)
+    local success, result = pcall(function()
+        return loadstring(HttpService:GetAsync(url, true))()
+    end)
+    if success then
+        return result
+    else
+        warn("Error al cargar la animación desde " .. url .. ": " .. tostring(result))
+        return nil
+    end
+end
 
-local attack1Animation = loadstring(HttpService:GetAsync("https://raw.githubusercontent.com/SkiddedUser/slash1/main/slash1.lua", true))()
-local attack2Animation = loadstring(HttpService:GetAsync("https://raw.githubusercontent.com/SkiddedUser/slash2/refs/heads/main/slash2.lua", true))()
+local idleAnimation = loadAnimationFromURL("https://raw.githubusercontent.com/SkiddedUser/rch1/main/rch2.lua")
+local runAnimation = loadAnimationFromURL("https://raw.githubusercontent.com/SkiddedUser/sdgsgsdhd/main/walk.lua")
+local attack1Animation = loadAnimationFromURL("https://raw.githubusercontent.com/SkiddedUser/slash1/main/slash1.lua")
+local attack2Animation = loadAnimationFromURL("https://raw.githubusercontent.com/SkiddedUser/slash2/refs/heads/main/slash2.lua")
 
 local player = owner
-local character = player.Character
+local character = player.Character or player.CharacterAdded:Wait()
 local humanoid = character:WaitForChild("Humanoid")
 local rootPart = character:WaitForChild("HumanoidRootPart")
 
 local mainFolder = Instance.new("Folder")
-mainFolder.Parent = game:GetService("LocalizationService")
+mainFolder.Parent = game:GetService("ReplicatedStorage") -- Cambiado a ReplicatedStorage para mejor visibilidad
 mainFolder.Name = player.Name .. "'s MainFolder"
 
 local remote = Instance.new("RemoteEvent")
 remote.Parent = mainFolder
 
-humanoid.Died:connect(function()
-	mainFolder:Destroy()
+humanoid.Died:Connect(function()
+    mainFolder:Destroy()
 end)
 
-NLS([[
-print("hi")
-local plr = game:GetService("Players").LocalPlayer
-local char = plr.Character
-local mouse = plr:GetMouse()
-
-local name = plr.Name
-
-local mainFolder = game:GetService("LocalizationService")[name .. "'s MainFolder"]
-local remote = mainFolder:WaitForChild("RemoteEvent")
-print("remote")
-
-mouse.Button1Down:connect(function()
-	remote:FireServer()
+-- Asegúrate de que el NLS se ejecute correctamente
+local success, errorMsg = pcall(function()
+    NLS([[
+        local Players = game:GetService("Players")
+        local plr = Players.LocalPlayer
+        local char = plr.Character or plr.CharacterAdded:Wait()
+        local mouse = plr:GetMouse()
+        
+        local mainFolder = game:GetService("ReplicatedStorage"):WaitForChild(plr.Name .. "'s MainFolder")
+        local remote = mainFolder:WaitForChild("RemoteEvent")
+        
+        mouse.Button1Down:Connect(function()
+            remote:FireServer()
+        end)
+    ]])
 end)
-]])
 
-local idleTrack = AnimationTrack.new()
-idleTrack:setAnimation(idleAnimation)
-idleTrack:setRig(character)
+if not success then
+    warn("Error en NLS: " .. errorMsg)
+end
 
-idleTrack.Looped = true
-idleTrack:AdjustWeight(1)
+-- Función para crear y configurar AnimationTracks
+local function setupAnimationTrack(animation, looped, weight)
+    if not animation then return nil end
+    local track = humanoid:LoadAnimation(animation)
+    track.Looped = looped
+    track.Priority = Enum.AnimationPriority.Action
+    track:AdjustWeight(weight)
+    return track
+end
 
-local runTrack = AnimationTrack.new()
-runTrack:setAnimation(runAnimation)
-runTrack:setRig(character)
+local idleTrack = setupAnimationTrack(idleAnimation, true, 1)
+local runTrack = setupAnimationTrack(runAnimation, true, 1)
+local attack1Track = setupAnimationTrack(attack1Animation, false, 1)
+local attack2Track = setupAnimationTrack(attack2Animation, false, 1)
 
-runTrack.Looped = true
-runTrack:AdjustWeight(2)
-
-local attack1Track = AnimationTrack.new()
-attack1Track:setAnimation(attack1Animation)
-attack1Track:setRig(character)
-
-attack1Track.Looped = false
-attack1Track:AdjustWeight(5)
-
-local attack2Track = AnimationTrack.new()
-attack2Track:setAnimation(attack2Animation)
-attack2Track:setRig(character)
-
-attack2Track.Looped = false
-attack2Track:AdjustWeight(5)
-
-local isPlaying = false
+local isMoving = false
 local movementThreshold = 0.1
 
 local combo = 0
 
-remote.OnServerEvent:connect(function()
-	combo = combo + 1
-	print(combo)
+remote.OnServerEvent:Connect(function()
+    combo = combo + 1
+    print("Combo:", combo)
 
-	if combo == 1 then
-		attack1Track:Play()
-	end
+    if combo == 1 and attack1Track then
+        attack1Track:Play()
+    elseif combo == 2 and attack2Track then
+        attack2Track:Play()
+    end
 
-	if combo == 2 then
-		attack2Track:Play()
-	end
-
-	if combo > 3 then
-		combo = 0
-	end
+    if combo > 2 then
+        combo = 0
+    end
 end)
 
 RunService.Heartbeat:Connect(function()
-	local velocity = rootPart.Velocity
-	local magnitude = velocity.Magnitude
+    local velocity = rootPart.Velocity
+    local magnitude = velocity.Magnitude
 
-	humanoid.WalkSpeed = 24
+    humanoid.WalkSpeed = 24
 
-	if magnitude > movementThreshold then
-		if isPlaying then
-			idleTrack:Stop()
-			runTrack:Play()
-			isPlaying = false
-			print("Stopped idle animation")
-		end
-	else
-		if not isPlaying then
-			idleTrack:Play()
-			runTrack:Stop()
-			isPlaying = true
-			print("Playing idle animation")
-		end
-	end
+    if magnitude > movementThreshold then
+        if not isMoving then
+            if idleTrack then idleTrack:Stop() end
+            if runTrack then runTrack:Play() end
+            isMoving = true
+            print("Playing run animation")
+        end
+    else
+        if isMoving then
+            if runTrack then runTrack:Stop() end
+            if idleTrack then idleTrack:Play() end
+            isMoving = false
+            print("Playing idle animation")
+        end
+    end
 end)
+
+print("Script de animación inicializado")
+
