@@ -625,15 +625,15 @@ local HttpService = game:GetService("HttpService")
 
 -- Cambiado a una función para manejar errores de carga
 local function loadAnimationFromURL(url)
-    local success, result = pcall(function()
-        return loadstring(HttpService:GetAsync(url, true))()
-    end)
-    if success then
-        return result
-    else
-        warn("Error al cargar la animación desde " .. url .. ": " .. tostring(result))
-        return nil
-    end
+	local success, result = pcall(function()
+		return loadstring(HttpService:GetAsync(url, true))()
+	end)
+	if success then
+		return result
+	else
+		warn("Error al cargar la animación desde " .. url .. ": " .. tostring(result))
+		return nil
+	end
 end
 
 local idleAnimation = loadAnimationFromURL("https://raw.githubusercontent.com/SkiddedUser/rch1/main/rch2.lua")
@@ -646,46 +646,14 @@ local character = player.Character or player.CharacterAdded:Wait()
 local humanoid = character:WaitForChild("Humanoid")
 local rootPart = character:WaitForChild("HumanoidRootPart")
 
-local mainFolder = Instance.new("Folder")
-mainFolder.Parent = game:GetService("ReplicatedStorage") -- Cambiado a ReplicatedStorage para mejor visibilidad
-mainFolder.Name = player.Name .. "'s MainFolder"
-
-local remote = Instance.new("RemoteEvent")
-remote.Parent = mainFolder
-
-humanoid.Died:Connect(function()
-    mainFolder:Destroy()
-end)
-
--- Asegúrate de que el NLS se ejecute correctamente
-local success, errorMsg = pcall(function()
-    NLS([[
-        local Players = game:GetService("Players")
-        local plr = Players.LocalPlayer
-        local char = plr.Character or plr.CharacterAdded:Wait()
-        local mouse = plr:GetMouse()
-        
-        local mainFolder = game:GetService("ReplicatedStorage"):WaitForChild(plr.Name .. "'s MainFolder")
-        local remote = mainFolder:WaitForChild("RemoteEvent")
-        
-        mouse.Button1Down:Connect(function()
-            remote:FireServer()
-        end)
-    ]])
-end)
-
-if not success then
-    warn("Error en NLS: " .. errorMsg)
-end
-
 -- Función para crear y configurar AnimationTracks
 local function setupAnimationTrack(animation, looped, weight)
-    if not animation then return nil end
-    local track = humanoid:LoadAnimation(animation)
-    track.Looped = looped
-    track.Priority = Enum.AnimationPriority.Action
-    track:AdjustWeight(weight)
-    return track
+	if not animation then return nil end
+	local track = humanoid:LoadAnimation(animation)
+	track.Looped = looped
+	track.Priority = Enum.AnimationPriority.Action
+	track:AdjustWeight(weight)
+	return track
 end
 
 local idleTrack = setupAnimationTrack(idleAnimation, true, 1)
@@ -698,42 +666,28 @@ local movementThreshold = 0.1
 
 local combo = 0
 
-remote.OnServerEvent:Connect(function()
-    combo = combo + 1
-    print("Combo:", combo)
-
-    if combo == 1 and attack1Track then
-        attack1Track:Play()
-    elseif combo == 2 and attack2Track then
-        attack2Track:Play()
-    end
-
-    if combo > 2 then
-        combo = 0
-    end
-end)
 
 RunService.Heartbeat:Connect(function()
-    local velocity = rootPart.Velocity
-    local magnitude = velocity.Magnitude
+	local velocity = rootPart.Velocity
+	local magnitude = velocity.Magnitude
 
-    humanoid.WalkSpeed = 24
+	humanoid.WalkSpeed = 24
 
-    if magnitude > movementThreshold then
-        if not isMoving then
-            if idleTrack then idleTrack:Stop() end
-            if runTrack then runTrack:Play() end
-            isMoving = true
-            print("Playing run animation")
-        end
-    else
-        if isMoving then
-            if runTrack then runTrack:Stop() end
-            if idleTrack then idleTrack:Play() end
-            isMoving = false
-            print("Playing idle animation")
-        end
-    end
+	if magnitude > movementThreshold then
+		if not isMoving then
+			if idleTrack then idleTrack:Stop() end
+			if runTrack then runTrack:Play() end
+			isMoving = true
+			print("Playing run animation")
+		end
+	else
+		if isMoving then
+			if runTrack then runTrack:Stop() end
+			if idleTrack then idleTrack:Play() end
+			isMoving = false
+			print("Playing idle animation")
+		end
+	end
 end)
 
 print("Script de animación inicializado")
