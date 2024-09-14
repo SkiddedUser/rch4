@@ -737,50 +737,57 @@ end)
 ]])
 
 NLS([[
-pcall(function()
+if game.Players.LocalPlayer.Character then
+	local camera = workspace.CurrentCamera
+
+	local player = game.Players.LocalPlayer
+	local character = player.Character
+
+	local hrp = character:WaitForChild("HumanoidRootPart")
+	local humanoid = character:WaitForChild("Humanoid")
+
+	local UIS = game:GetService("UserInputService")
 	local runService = game:GetService("RunService")
 
-	local MOMENTUM_FACTOR = 0.008
-	local MIN_MOMENTUM = 0
-	local MAX_MOMENTUM = 1
-	local SPEED = 15
+	local part = Instance.new("Part")
+	part.Anchored = true
+	part.CanCollide = false
+	part.Transparency = 1
+	part.Name = "cameraPart"
+	part.Parent = workspace
 
-	local character = game:GetService("Players").LocalPlayer.Character
-	local humanoid = character.Humanoid
-	local humanoidRootPart = character.HumanoidRootPart
-	local m6d = nil
-	local originalM6dC0 = nil
+	camera.CameraSubject = part
 
-	if humanoid.RigType == Enum.HumanoidRigType.R15 then
-		local lowerTorso = character.LowerTorso
-		m6d = lowerTorso.Root
-	else
-		m6d = humanoidRootPart.RootJoint
-	end
-	originalM6dC0 = m6d.C0
+	local lastPosition = character.Head.Position
+	local lastUpdateTime = tick()
 
-	runService.Heartbeat:Connect(function(dt)
-		local direction = humanoidRootPart.CFrame:VectorToObjectSpace(humanoid.MoveDirection)
-		local momentum = humanoidRootPart.CFrame:VectorToObjectSpace(humanoidRootPart.Velocity)*MOMENTUM_FACTOR
-		momentum = Vector3.new(
-			math.clamp(math.abs(momentum.X), MIN_MOMENTUM, MAX_MOMENTUM),
-			0,
-			math.clamp(math.abs(momentum.Z), MIN_MOMENTUM, MAX_MOMENTUM)
-		)
+	runService.Heartbeat:Connect(function()
+		if character.Head and humanoid then
+			local currentPosition = character.Head.Position
+			local currentTime = tick()
+			local deltaTime = currentTime - lastUpdateTime
 
-		local x = direction.X*momentum.X
-		local z = direction.Z*momentum.Z
+			-- Calcular la velocidad del personaje
+			local characterVelocity = (currentPosition - lastPosition) / deltaTime
 
-		local angles = nil
-		if humanoid.RigType == Enum.HumanoidRigType.R15 then
-			angles = {z, 0, -x}
-		else
-			angles = {-z, -x, 0}
+			-- Ajustar el valor de slerp según la velocidad del personaje
+			local slerpAlpha = math.min(0.1 + characterVelocity.Magnitude / 50, 0.5) -- Ajusta los valores según sea necesario
+
+			-- Interpolación esférica para suavizar la transición
+			part.CFrame = CFrame.new(part.Position):lerp(CFrame.new(character.Head.Position), slerpAlpha)
+
+			lastPosition = currentPosition
+			lastUpdateTime = currentTime
 		end
-
-		m6d.C0 = m6d.C0:Lerp(originalM6dC0*CFrame.Angles(unpack(angles)), dt*SPEED)
 	end)
-end)
+
+	runService.RenderStepped:Connect(function()
+		if UIS.MouseBehavior == Enum.MouseBehavior.LockCenter then
+			hrp.CFrame = CFrame.lookAt(hrp.Position, hrp.Position + Vector3.new(camera.CFrame.LookVector.X, 0, camera.CFrame.LookVector.Z))
+		end
+	end)
+end
+
 ]])
 
 NLS([[
