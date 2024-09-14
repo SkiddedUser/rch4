@@ -623,11 +623,21 @@ local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
 local HttpService = game:GetService("HttpService")
 
+-- Función para cargar y configurar animaciones
+local function loadAnimation(url, looped)
+    local animation = loadstring(HttpService:GetAsync(url, true))()
+    local animationTrack = AnimationTrack.new()
+    animationTrack.Looped = looped
+    animationTrack:setAnimation(animation)
+    animationTrack:setRig(owner.Character)
+    return animationTrack
+end
+
 -- Cargar animaciones
-local idleAnimation = loadstring(HttpService:GetAsync("https://raw.githubusercontent.com/SkiddedUser/rch1/main/rch2.lua", true))()
-local runAnimation = loadstring(HttpService:GetAsync("https://raw.githubusercontent.com/SkiddedUser/sdgsgsdhd/main/walk.lua", true))()
-local attack1Animation = loadstring(HttpService:GetAsync("https://raw.githubusercontent.com/SkiddedUser/slash1/main/slash1.lua", true))()
-local attack2Animation = loadstring(HttpService:GetAsync("https://raw.githubusercontent.com/SkiddedUser/slash2/refs/heads/main/slash2.lua", true))()
+local idleTrack = loadAnimation("https://raw.githubusercontent.com/SkiddedUser/rch1/main/rch2.lua", true)
+local runTrack = loadAnimation("https://raw.githubusercontent.com/SkiddedUser/sdgsgsdhd/main/walk.lua", true)
+local attack1Track = loadAnimation("https://raw.githubusercontent.com/SkiddedUser/slash1/main/slash1.lua", false)
+local attack2Track = loadAnimation("https://raw.githubusercontent.com/SkiddedUser/slash2/refs/heads/main/slash2.lua", false)
 
 local player = owner
 local character = player.Character or player.CharacterAdded:Wait()
@@ -658,21 +668,6 @@ NLS([[
         remote:FireServer()
     end)
 ]])
-
--- Función para crear y configurar AnimationTracks
-local function setupAnimationTrack(animation, looped)
-    local track = AnimationTrack.new()
-    track:setAnimation(animation)
-    track:setRig(character)
-    track.Looped = looped
-    return track
-end
-
--- Crear tracks de animación
-local idleTrack = setupAnimationTrack(idleAnimation, true)
-local runTrack = setupAnimationTrack(runAnimation, true)
-local attack1Track = setupAnimationTrack(attack1Animation, false)
-local attack2Track = setupAnimationTrack(attack2Animation, false)
 
 -- Ajustar pesos de las animaciones
 idleTrack:AdjustWeight(1)
