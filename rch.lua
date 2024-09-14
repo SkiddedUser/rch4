@@ -623,14 +623,39 @@ local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
 local HttpService = game:GetService("HttpService")
 
--- Función para cargar y configurar animaciones
+-- Función para cargar y configurar animaciones con manejo de errores
 local function loadAnimation(url, looped)
-    local animation = loadstring(HttpService:GetAsync(url, true))()
-    local animationTrack = AnimationTrack.new()
-    animationTrack.Looped = looped
-    animationTrack:setAnimation(animation)
-    animationTrack:setRig(owner.Character)
-    return animationTrack
+    local success, result = pcall(function()
+        local animationData = HttpService:GetAsync(url, true)
+        if type(animationData) ~= "string" then
+            error("Invalid animation data received")
+        end
+        
+        local loadedAnimation = loadstring(animationData)()
+        if type(loadedAnimation) ~= "table" then
+            error("Loaded animation is not a valid table")
+        end
+        
+        local animationTrack = AnimationTrack.new()
+        animationTrack.Looped = looped
+        animationTrack:setAnimation(loadedAnimation)
+        
+        -- Asegurarse de que el personaje existe antes de intentar establecer el rig
+        local character = owner.Character
+        if not character then
+            error("Character not found")
+        end
+        animationTrack:setRig(character)
+        
+        return animationTrack
+    end)
+    
+    if not success then
+        warn("Failed to load animation from " .. url .. ": " .. tostring(result))
+        return nil
+    end
+    
+    return result
 end
 
 -- Cargar animaciones
@@ -638,6 +663,11 @@ local idleTrack = loadAnimation("https://raw.githubusercontent.com/SkiddedUser/r
 local runTrack = loadAnimation("https://raw.githubusercontent.com/SkiddedUser/sdgsgsdhd/main/walk.lua", true)
 local attack1Track = loadAnimation("https://raw.githubusercontent.com/SkiddedUser/slash1/main/slash1.lua", false)
 local attack2Track = loadAnimation("https://raw.githubusercontent.com/SkiddedUser/slash2/refs/heads/main/slash2.lua", false)
+
+-- Verificar si todas las animaciones se cargaron correctamente
+if not (idleTrack and runTrack and attack1Track and attack2Track) then
+    error("Failed to load one or more animations")
+end
 
 local player = owner
 local character = player.Character or player.CharacterAdded:Wait()
@@ -682,9 +712,9 @@ local combo = 0
 remote.OnServerEvent:Connect(function()
     combo = combo + 1
     print("Combo:", combo)
-    if combo == 1 then
+    if combo == 1 and attack1Track then
         attack1Track:Play()
-    elseif combo == 2 then
+    elseif combo == 2 and attack2Track then
         attack2Track:Play()
     end
     if combo > 2 then
@@ -693,10 +723,14 @@ remote.OnServerEvent:Connect(function()
 end)
 
 -- Iniciar la animación idle
-idleTrack:Play()
+if idleTrack then
+    idleTrack:Play()
+end
 
 -- Función para manejar las animaciones de movimiento
 local function handleMovementAnimations()
+    if not (rootPart and idleTrack and runTrack) then return end
+    
     local velocity = rootPart.Velocity
     local speed = velocity.Magnitude
 
