@@ -750,6 +750,61 @@ end)
 
 ]])
 
+NLS([[
+   task.wait()
+if game.Players.LocalPlayer.Character then
+	local camera = workspace.CurrentCamera
+
+	local player = game.Players.LocalPlayer
+	local character = player.Character
+
+	local hrp = character:WaitForChild("HumanoidRootPart")
+	local humanoid = character:WaitForChild("Humanoid")
+
+	local UIS = game:GetService("UserInputService")
+	local runService = game:GetService("RunService")
+
+	local part = Instance.new("Part")
+	part.Anchored = true
+	part.CanCollide = false
+	part.Transparency = 1
+	part.Name = "cameraPart"
+	part.Parent = workspace
+
+	camera.CameraSubject = part
+
+	local lastPosition = character.Head.Position
+	local lastUpdateTime = tick()
+
+	runService.Heartbeat:Connect(function()
+		if character.Head and humanoid then
+			local currentPosition = character.Head.Position
+			local currentTime = tick()
+			local deltaTime = currentTime - lastUpdateTime
+
+			-- Calcular la velocidad del personaje
+			local characterVelocity = (currentPosition - lastPosition) / deltaTime
+
+			-- Ajustar el valor de slerp según la velocidad del personaje
+			local slerpAlpha = math.min(0.1 + characterVelocity.Magnitude / 50, 0.5) -- Ajusta los valores según sea necesario
+
+			-- Interpolación esférica para suavizar la transición
+			part.CFrame = CFrame.new(part.Position):lerp(CFrame.new(character.Head.Position), slerpAlpha)
+
+			lastPosition = currentPosition
+			lastUpdateTime = currentTime
+		end
+	end)
+
+	runService.RenderStepped:Connect(function()
+		if UIS.MouseBehavior == Enum.MouseBehavior.LockCenter then
+			hrp.CFrame = CFrame.lookAt(hrp.Position, hrp.Position + Vector3.new(camera.CFrame.LookVector.X, 0, camera.CFrame.LookVector.Z))
+		end
+	end)
+end
+
+]])
+
 -- Crear y configurar AnimationTracks usando AnimationTrack.new()
 local idleTrack = AnimationTrack.new()
 idleTrack:setAnimation(idleAnimation)
