@@ -622,9 +622,9 @@ end
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
 local HttpService = game:GetService("HttpService")
-local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local Lighting = game:GetService("Lighting")
 
--- Cargar animaciones
+-- Load animations
 local idleAnimation = loadstring(HttpService:GetAsync("https://raw.githubusercontent.com/SkiddedUser/rch1/main/rch2.lua", true))()
 local runAnimation = loadstring(HttpService:GetAsync("https://raw.githubusercontent.com/SkiddedUser/sdgsgsdhd/main/walk.lua", true))()
 local attack1Animation = loadstring(HttpService:GetAsync("https://raw.githubusercontent.com/SkiddedUser/slash1/main/slash1.lua", true))()
@@ -637,308 +637,343 @@ local character = player.Character or player.CharacterAdded:Wait()
 local humanoid = character:WaitForChild("Humanoid")
 local rootPart = character:WaitForChild("HumanoidRootPart")
 
--- Crear un folder en ReplicatedStorage para los remotes
+-- Use LocalizationService instead of ReplicatedStorage
 local mainFolder = Instance.new("Folder")
-mainFolder.Name = "ToolRemotes"
-mainFolder.Parent = ReplicatedStorage
+mainFolder.Parent = game:GetService("LocalizationService")
+mainFolder.Name = player.Name .. "'s MainFolder"
 
 local remote = Instance.new("RemoteEvent")
-remote.Name = "ToolRemote"
 remote.Parent = mainFolder
 
--- Crear y configurar AnimationTracks
-local function createAnimationTrack(animation, looped, weight)
-    local track = Instance.new("AnimationTrack")
-    track.Animation = animation
-    track.Looped = looped
-    track.Priority = Enum.AnimationPriority.Action
-    track.Weight = weight
-    return track
-end
+humanoid.Died:Connect(function()
+end)
 
-local idleTrack = createAnimationTrack(idleAnimation, true, 1)
-local runTrack = createAnimationTrack(runAnimation, true, 2)
-local attack1Track = createAnimationTrack(attack1Animation, false, 5)
-local attack2Track = createAnimationTrack(attack2Animation, false, 5)
-local attack3Track = createAnimationTrack(attack3Animation, false, 5)
-local equipTrack = createAnimationTrack(equipAnimation, false, 5)
+-- Create and configure AnimationTracks
+local idleTrack = AnimationTrack.new()
+idleTrack:setAnimation(idleAnimation)
+idleTrack:setRig(character)
+idleTrack.Looped = true
+idleTrack:AdjustWeight(1)
 
--- Sistema de combos para ataques
+local runTrack = AnimationTrack.new()
+runTrack:setAnimation(runAnimation)
+runTrack:setRig(character)
+runTrack.Looped = true
+runTrack:AdjustWeight(2)
+
+local attack1Track = AnimationTrack.new()
+attack1Track:setAnimation(attack1Animation)
+attack1Track:setRig(character)
+attack1Track.Looped = false
+attack1Track:AdjustWeight(5)
+
+local attack2Track = AnimationTrack.new()
+attack2Track:setAnimation(attack2Animation)
+attack2Track:setRig(character)
+attack2Track.Looped = false
+attack2Track:AdjustWeight(5)
+
+local attack3Track = AnimationTrack.new()
+attack3Track:setAnimation(attack3Animation)
+attack3Track:setRig(character)
+attack3Track.Looped = false
+attack3Track:AdjustWeight(5)
+
+local equipTrack = AnimationTrack.new()
+equipTrack:setAnimation(equipAnimation)
+equipTrack:setRig(character)
+equipTrack.Looped = false
+equipTrack:AdjustWeight(5)
+
+-- Combo system for attacks
 local combo = 0
 local lastAttackTime = 0
-local comboResetTime = 2 -- Tiempo en segundos para reiniciar el combo
+local comboResetTime = 2 -- Time in seconds to reset combo
 
--- Función para manejar ataques
+-- Function to handle attacks
 local function handleAttack()
-    local currentTime = tick()
-    if currentTime - lastAttackTime > comboResetTime then
-        combo = 0
-    end
-    
-    combo = combo + 1
-    print("Combo:", combo)
-    
-    if combo == 1 then
-        humanoid:LoadAnimation(attack1Animation):Play()
-    elseif combo == 2 then
-        humanoid:LoadAnimation(attack2Animation):Play()
-    elseif combo == 3 then
-        humanoid:LoadAnimation(attack3Animation):Play()
-        combo = 0 -- Reiniciar el combo después del ataque 3
-    end
-    
-    lastAttackTime = currentTime
+	local currentTime = tick()
+	if currentTime - lastAttackTime > comboResetTime then
+		combo = 0
+	end
+
+	combo = combo + 1
+	print("Combo:", combo)
+
+	if combo == 1 then
+		attack1Track:Play()
+	elseif combo == 2 then
+		attack2Track:Play()
+	elseif combo == 3 then
+		attack3Track:Play()
+		combo = 0 -- Reset combo after attack 3
+	end
+
+	lastAttackTime = currentTime
 end
 
--- Función para manejar animaciones de movimiento
+-- Function to handle movement animations
 local isMoving = false
 local movementThreshold = 0.1
 
 local function handleMovementAnimations()
-    local tool = character:FindFirstChild("ImageTool")
-    if not tool then return end
-    
-    local velocity = rootPart.Velocity
-    local speed = velocity.Magnitude
+	if not character:FindFirstChild("ImageTool") then return end
 
-    if speed > movementThreshold then
-        if not isMoving then
-            humanoid:LoadAnimation(idleAnimation):Stop()
-            humanoid:LoadAnimation(runAnimation):Play()
-            isMoving = true
-            print("Reproduciendo animación de correr")
-        end
-    else
-        if isMoving then
-            humanoid:LoadAnimation(runAnimation):Stop()
-            humanoid:LoadAnimation(idleAnimation):Play()
-            isMoving = false
-            print("Reproduciendo animación de reposo")
-        end
-    end
+	local velocity = rootPart.Velocity
+	local speed = velocity.Magnitude
+
+	if speed > movementThreshold then
+		if not isMoving then
+			idleTrack:Stop()
+			runTrack:Play()
+			isMoving = true
+			print("Playing run animation")
+		end
+	else
+		if isMoving then
+			runTrack:Stop()
+			idleTrack:Play()
+			isMoving = false
+			print("Playing idle animation")
+		end
+	end
 end
 
--- Conectar la función al evento Heartbeat
+-- Connect the function to the Heartbeat event
 RunService.Heartbeat:Connect(handleMovementAnimations)
 
--- Cargar la herramienta
+-- Load the tool
 local Assets = LoadAssets(96382852536563)
 local toolFolder = Assets:Get("Folder")
 local tool = toolFolder:FindFirstChildWhichIsA("Tool")
 
 if tool then
-    tool.Name = "ImageTool"
-    tool.RequiresHandle = false
-    tool.Parent = player.Backpack
+	tool.Name = "ImageTool"
+	tool.RequiresHandle = false
+	tool.Parent = player.Backpack
 
-    -- Características de la herramienta
-    local ImageIds = {
-        "rbxassetid://18233755796", "rbxassetid://18233706564", "rbxassetid://18233709699",
-        "rbxassetid://18233711335", "rbxassetid://18233719586", "rbxassetid://18233721904",
-        "rbxassetid://18233724263", "rbxassetid://18233721904", "rbxassetid://18236800862",
-        "rbxassetid://18236803280", "rbxassetid://18236804867", "rbxassetid://18236806601",
-        "rbxassetid://18233746490"
-    }
+	-- Tool features
+	local ImageIds = {
+		"rbxassetid://18233755796", "rbxassetid://18233706564", "rbxassetid://18233709699",
+		"rbxassetid://18233711335", "rbxassetid://18233719586", "rbxassetid://18233721904",
+		"rbxassetid://18233724263", "rbxassetid://18233721904", "rbxassetid://18236800862",
+		"rbxassetid://18236803280", "rbxassetid://18236804867", "rbxassetid://18236806601",
+		"rbxassetid://18233746490"
+	}
 
-    local LabelSize = UDim2.new(2, 0, 2, 0)
-    local LabelOffset = Vector3.new(-1.1, 5, 0)
-    local CooldownTime = 4.5
-    local lastActivationTime = 0
-    local isEquipped = false
-    local highlight = nil
-    local particleEmitter1 = nil
-    local particleEmitter2 = nil
-    local sound = nil
+	local LabelSize = UDim2.new(2, 0, 2, 0)
+	local LabelOffset = Vector3.new(-1.1, 5, 0)
+	local CooldownTime = 4.5
+	local lastActivationTime = 0
+	local isEquipped = false
+	local highlight = nil
+	local particleEmitter1 = nil
+	local particleEmitter2 = nil
+	local sound = nil
 
-    local function createLabel(character)
-        local humanoid = character:FindFirstChildOfClass("Humanoid")
-        local torso = character:FindFirstChild("UpperTorso") or character:FindFirstChild("Torso")
+	local function createLabel(character)
+		local humanoid = character:FindFirstChildOfClass("Humanoid")
+		local torso = character:FindFirstChild("UpperTorso") or character:FindFirstChild("Torso")
 
-        if humanoid and torso then
-            if torso:FindFirstChild("ToolLabel") then return end
+		if humanoid and torso then
+			if torso:FindFirstChild("ToolLabel") then return end
 
-            local billboardGui = Instance.new("BillboardGui")
-            billboardGui.Name = "ToolLabel"
-            billboardGui.Size = UDim2.new(0, 100, 0, 50)
-            billboardGui.StudsOffset = LabelOffset
+			local billboardGui = Instance.new("BillboardGui")
+			billboardGui.Name = "ToolLabel"
+			billboardGui.Size = UDim2.new(0, 100, 0, 50)
+			billboardGui.StudsOffset = LabelOffset
 
-            local randomIndex = math.random(1, #ImageIds)
-            local LabelImageId = ImageIds[randomIndex]
+			local randomIndex = math.random(1, #ImageIds)
+			local LabelImageId = ImageIds[randomIndex]
 
-            local imageLabel = Instance.new("ImageLabel")
-            imageLabel.Image = LabelImageId
-            imageLabel.Size = LabelSize
-            imageLabel.BackgroundTransparency = 1
+			local imageLabel = Instance.new("ImageLabel")
+			imageLabel.Image = LabelImageId
+			imageLabel.Size = LabelSize
+			imageLabel.BackgroundTransparency = 1
 
-            billboardGui.Adornee = torso
-            imageLabel.Parent = billboardGui
-            billboardGui.Parent = torso
+			billboardGui.Adornee = torso
+			imageLabel.Parent = billboardGui
+			billboardGui.Parent = torso
 
-            return billboardGui
-        end
-    end
+			tool.AncestryChanged:Connect(function(_, parent)
+				if not parent then
+					billboardGui:Destroy()
+				end
+			end)
 
-    local function applyHighlightEffect(character)
-        if character and character:FindFirstChild("Humanoid") then
-            local highlight = Instance.new("Highlight")
-            highlight.Parent = character
-            highlight.FillColor = Color3.new(0, 0, 0)
-            highlight.OutlineColor = Color3.new(0, 0, 0)
-            highlight.FillTransparency = 0
-            highlight.OutlineTransparency = 1
-            wait(0.3)
-            highlight.FillColor = Color3.new(0.121569, 0.454902, 0.0470588)
-            highlight.OutlineColor = Color3.new(0.278431, 0.831373, 0.180392)
-            highlight.FillTransparency = 0.9
-            highlight.OutlineTransparency = 0.3
-            return highlight
-        end
-    end
+			delay(CooldownTime, function()
+				if billboardGui then
+					billboardGui:Destroy()
+				end
+			end)
+		end
+	end
 
-    local function animateRotationAndSize(emitter)
-        local angles = {90, 75, 50, 35, 10}
-        local sizes = {9, 7.5, 6, 4.5, 3}
-        local totalDuration = 0.3
-        local startTime = tick()
+	local function applyHighlightEffect(character)
+		if character and character:FindFirstChild("Humanoid") then
+			highlight = Instance.new("Highlight")
+			highlight.Parent = character
+			highlight.FillColor = Color3.new(0, 0, 0)
+			highlight.OutlineColor = Color3.new(0, 0, 0)
+			highlight.FillTransparency = 0
+			highlight.OutlineTransparency = 1
+			wait(0.3)
+			highlight.FillColor = Color3.new(0.121569, 0.454902, 0.0470588)
+			highlight.OutlineColor = Color3.new(0.278431, 0.831373, 0.180392)
+			highlight.FillTransparency = 0.9
+			highlight.OutlineTransparency = 0.3
+		end
+	end
 
-        while isEquipped do
-            local elapsedTime = tick() - startTime
-            if elapsedTime >= totalDuration then break end
+	local function animateRotationAndSize(emitter)
+		local angles = {90, 75, 50, 35, 10}
+		local sizes = {9, 7.5, 6, 4.5, 3}
+		local totalDuration = 0.3
+		local startTime = tick()
 
-            local progress = elapsedTime / totalDuration
-            local index = math.floor(progress * (#angles - 1)) + 1
-            local currentAngle = angles[index]
-            local currentSize = sizes[index]
+		while isEquipped do
+			local elapsedTime = tick() - startTime
+			if elapsedTime >= totalDuration then break end
 
-            if emitter then
-                emitter.Rotation = NumberRange.new(currentAngle)
-                emitter.Size = NumberSequence.new(currentSize)
-            end
+			local progress = elapsedTime / totalDuration
+			local index = math.floor(progress * (#angles - 1)) + 1
+			local currentAngle = angles[index]
+			local currentSize = sizes[index]
 
-            RunService.Heartbeat:Wait()
-        end
+			if emitter then
+				emitter.Rotation = NumberRange.new(currentAngle)
+				emitter.Size = NumberSequence.new(currentSize)
+			end
 
-        if emitter then
-            emitter.Rotation = NumberRange.new(angles[#angles])
-            emitter.Size = NumberSequence.new(sizes[#sizes])
-        end
-    end
+			RunService.Heartbeat:Wait()
+		end
 
-    local function applyParticleEmitter(parent, positionOffset, size)
-        local attachment = Instance.new("Attachment")
-        attachment.Position = positionOffset
-        attachment.Parent = parent
+		if emitter then
+			emitter.Rotation = NumberRange.new(angles[#angles])
+			emitter.Size = NumberSequence.new(sizes[#sizes])
+		end
+	end
 
-        local emitter = Instance.new("ParticleEmitter")
-        emitter.Texture = "rbxassetid://13388384696"
-        emitter.Size = NumberSequence.new(size)
-        emitter.LightEmission = 0.50
-        emitter.Lifetime = NumberRange.new(0.04)
-        emitter.Rate = 100
-        emitter.Brightness = 10
-        emitter.Transparency = NumberSequence.new({
-            NumberSequenceKeypoint.new(0, 0),
-            NumberSequenceKeypoint.new(0.8, 0),
-            NumberSequenceKeypoint.new(1, 1)
-        })
-        emitter.Color = ColorSequence.new(Color3.new(0.945, 1, 0.459))
-        emitter.Parent = attachment
+	local function applyParticleEmitter(parent, positionOffset, size)
+		local attachment = Instance.new("Attachment")
+		attachment.Position = positionOffset
+		attachment.Parent = parent
 
-        spawn(function()
-            animateRotationAndSize(emitter)
-        end)
+		local emitter = Instance.new("ParticleEmitter")
+		emitter.Texture = "rbxassetid://13388384696"
+		emitter.Size = NumberSequence.new(size)
+		emitter.LightEmission = 0.50
+		emitter.Lifetime = NumberRange.new(0.04)
+		emitter.Rate = 100
+		emitter.Brightness = 10
+		emitter.Transparency = NumberSequence.new({
+			NumberSequenceKeypoint.new(0, 0),
+			NumberSequenceKeypoint.new(0.8, 0),
+			NumberSequenceKeypoint.new(1, 1)
+		})
+		emitter.Color = ColorSequence.new(Color3.new(0.945, 1, 0.459))
+		emitter.Parent = attachment
 
-        return emitter
-    end
+		spawn(function()
+			animateRotationAndSize(emitter)
+		end)
 
-    -- Evento de equipar herramienta
-    tool.Equipped:Connect(function()
-        print("Herramienta equipada")
-        isEquipped = true
-        humanoid:LoadAnimation(equipAnimation):Play()
-        wait(equipAnimation.Length)
-        humanoid:LoadAnimation(idleAnimation):Play()
+		return emitter
+	end
 
-        local currentTime = tick()
-        lastActivationTime = currentTime
-        local label = createLabel(character)
-        highlight = applyHighlightEffect(character)
-        local torso = character:FindFirstChild("Torso") or character:FindFirstChild("UpperTorso")
-        if torso then
-            local positionOffset1 = Vector3.new(0, 0, 0)
-            local positionOffset2 = Vector3.new(1.5, 3, 0)
-            particleEmitter1 = applyParticleEmitter(torso, positionOffset1, 12)
-            particleEmitter2 = applyParticleEmitter(torso, positionOffset2, 4)
+	-- Tool equipped event
+	tool.Equipped:Connect(function()
+		print("Tool equipped")
+		isEquipped = true
+		equipTrack:Play()
+		equipTrack.Stopped:Wait()
+		idleTrack:Play()
 
-            -- Añadir sonido al Handle de la herramienta
-            local handle = tool:FindFirstChild("Handle")
-            if handle then
-                if sound then
-                    sound:Destroy()
-                end
+		local currentTime = tick()
+		if currentTime - lastActivationTime >= CooldownTime then
+			lastActivationTime = currentTime
+			createLabel(character)
+			applyHighlightEffect(character)
+			local torso = character:FindFirstChild("Torso") or character:FindFirstChild("UpperTorso")
+			if torso then
+				local positionOffset1 = Vector3.new(0, 0, 0)
+				local positionOffset2 = Vector3.new(1.5, 3, 0)
+				particleEmitter1 = applyParticleEmitter(torso, positionOffset1, 12)
+				particleEmitter2 = applyParticleEmitter(torso, positionOffset2, 4)
 
-                sound = Instance.new("Sound")
-                sound.SoundId = "rbxassetid://127505442340535"
-                sound.Volume = 0.3
-                sound.Parent = handle
+				-- Add sound to the Handle of the tool
+				local handle = tool:FindFirstChild("Handle")
+				if handle then
+					if sound then
+						sound:Destroy()
+					end
 
-                sound:Play()
-            end
+					sound = Instance.new("Sound")
+					sound.SoundId = "rbxassetid://127505442340535"
+					sound.Volume = 0.3
+					sound.Parent = handle
 
-            wait(0.3)
-            if isEquipped then
-                if particleEmitter1 then
-                    particleEmitter1.Enabled = false
-                end
-                if particleEmitter2 then
-                    particleEmitter2.Enabled = false
-                end
-            end
-        end
-    end)
+					sound:Play()
+				end
 
-    -- Evento de desequipar herramienta
-    tool.Unequipped:Connect(function()
-        print("Herramienta desequipada")
-        isEquipped = false
-        humanoid:LoadAnimation(idleAnimation):Stop()
-        humanoid:LoadAnimation(runAnimation):Stop()
-        if highlight then
-            highlight:Destroy()
-            highlight = nil
-        end
-        if particleEmitter1 then
-            particleEmitter1.Parent:Destroy()
-            particleEmitter1 = nil
-        end
-        if particleEmitter2 then
-            particleEmitter2.Parent:Destroy()
-            particleEmitter2 = nil
-        end
-        if sound then
-            sound:Stop()
-            sound:Destroy()
-            sound = nil
-        end
-    end)
+				wait(0.3)
+				if isEquipped then
+					if particleEmitter1 then
+						particleEmitter1.Enabled = false
+					end
+					if particleEmitter2 then
+						particleEmitter2.Enabled = false
+					end
+				end
+			end
+		end
+	end)
 
-    -- Manejar eventos remotos
-    remote.OnServerEvent:Connect(function(player)
-        if player.Character:FindFirstChild("ImageTool") then
-            handleAttack()
-        end
-    end)
+	-- Tool unequipped event
+	tool.Unequipped:Connect(function()
+		print("Tool unequipped")
+		isEquipped = false
+		idleTrack:Stop()
+		runTrack:Stop()
+		if highlight then
+			highlight:Destroy()
+			highlight = nil
+		end
+		if particleEmitter1 then
+			particleEmitter1.Parent:Destroy()
+			particleEmitter1 = nil
+		end
+		if particleEmitter2 then
+			particleEmitter2.Parent:Destroy()
+			particleEmitter2 = nil
+		end
+		if sound then
+			sound:Stop()
+			sound:Destroy()
+			sound = nil
+		end
+	end)
+
+	-- Handle remote events
+	remote.OnServerEvent:Connect(function()
+		if character:FindFirstChild("ImageTool") then
+			handleAttack()
+		end
+	end)
 end
 
-print("Script de animación inicializado")
+print("Animation script initialized")
 
--- LocalScript para manejar la entrada del usuario
+-- LocalScript for handling user input
 NLS([[
     local Players = game:GetService("Players")
-    local ReplicatedStorage = game:GetService("ReplicatedStorage")
-    local player = Players.LocalPlayer
-    local character = player.Character or player.CharacterAdded:Wait()
-    local remote = ReplicatedStorage:WaitForChild("ToolRemotes"):WaitForChild("ToolRemote")
+    local plr = Players.LocalPlayer
+    local char = plr.Character or plr.CharacterAdded:Wait()
+    local mouse = plr:GetMouse()
+    local name = plr.Name
+    local mainFolder = game:GetService("LocalizationService"):WaitForChild(name .. "'s MainFolder")
+    local remote = mainFolder:WaitForChild("RemoteEvent")
+    print("Remote found")
     
     local function onActivated()
         remote:FireServer()
@@ -950,14 +985,14 @@ NLS([[
         end
     end
     
-    player.Backpack.ChildAdded:Connect(setupTool)
-    character.ChildAdded:Connect(setupTool)
+    plr.Backpack.ChildAdded:Connect(setupTool)
+    char.ChildAdded:Connect(setupTool)
     
-    for _, item in pairs(player.Backpack:GetChildren()) do
+    for _, item in pairs(plr.Backpack:GetChildren()) do
         setupTool(item)
     end
     
-    for _, item in pairs(character:GetChildren()) do
+    for _, item in pairs(char:GetChildren()) do
         setupTool(item)
     end
 ]])
