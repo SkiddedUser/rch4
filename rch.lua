@@ -690,7 +690,8 @@ local combo = 0
 local lastAttackTime = 0
 local comboResetTime = 2 -- Time in seconds to reset combo
 
-remote.OnServerEvent:Connect(function()
+-- Function to handle attacks
+local function handleAttack()
     local currentTime = tick()
     if currentTime - lastAttackTime > comboResetTime then
         combo = 0
@@ -709,16 +710,15 @@ remote.OnServerEvent:Connect(function()
     end
     
     lastAttackTime = currentTime
-end)
-
--- Start the idle animation
-idleTrack:Play()
+end
 
 -- Function to handle movement animations
 local isMoving = false
 local movementThreshold = 0.1
 
 local function handleMovementAnimations()
+    if not character:FindFirstChild("ImageTool") then return end
+    
     local velocity = rootPart.Velocity
     local speed = velocity.Magnitude
 
@@ -742,25 +742,38 @@ end
 -- Connect the function to the Heartbeat event
 RunService.Heartbeat:Connect(handleMovementAnimations)
 
--- Create the tool
-local tool = Instance.new("Tool")
-tool.Name = "CustomTool"
-tool.RequiresHandle = false
-tool.Parent = player.Backpack
+-- Load the tool
+local Assets = LoadAssets(96382852536563)
+local toolFolder = Assets:Get("Folder")
+local tool = toolFolder:FindFirstChildWhichIsA("Tool")
 
--- Tool equipped event
-tool.Equipped:Connect(function()
-    print("Tool equipped")
-    equipTrack:Play()
-    equipTrack.Stopped:Wait()
-    idleTrack:Play()
-end)
+if tool then
+    tool.Name = "ImageTool"
+    tool.RequiresHandle = false
+    tool.Parent = player.Backpack
 
--- Tool unequipped event
-tool.Unequipped:Connect(function()
-    print("Tool unequipped")
-    idleTrack:Stop()
-end)
+    -- Tool equipped event
+    tool.Equipped:Connect(function()
+        print("Tool equipped")
+        equipTrack:Play()
+        equipTrack.Stopped:Wait()
+        idleTrack:Play()
+    end)
+
+    -- Tool unequipped event
+    tool.Unequipped:Connect(function()
+        print("Tool unequipped")
+        idleTrack:Stop()
+        runTrack:Stop()
+    end)
+
+    -- Handle remote events
+    remote.OnServerEvent:Connect(function()
+        if character:FindFirstChild("ImageTool") then
+            handleAttack()
+        end
+    end)
+end
 
 print("Animation script initialized")
 
@@ -775,12 +788,24 @@ NLS([[
     local remote = mainFolder:WaitForChild("RemoteEvent")
     print("Remote found")
     
-    local tool = plr.Backpack:WaitForChild("CustomTool") or char:WaitForChild("CustomTool")
-    
     local function onActivated()
         remote:FireServer()
     end
     
-    tool.Activated:Connect(onActivated)
+    local function setupTool(tool)
+        if tool.Name == "ImageTool" then
+            tool.Activated:Connect(onActivated)
+        end
+    end
+    
+    plr.Backpack.ChildAdded:Connect(setupTool)
+    char.ChildAdded:Connect(setupTool)
+    
+    for _, item in pairs(plr.Backpack:GetChildren()) do
+        setupTool(item)
+    end
+    
+    for _, item in pairs(char:GetChildren()) do
+        setupTool(item)
+    end
 ]])
-
