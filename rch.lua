@@ -623,19 +623,20 @@ local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
 local HttpService = game:GetService("HttpService")
 
--- Cargar animaciones
+-- Load animations
 local idleAnimation = loadstring(HttpService:GetAsync("https://raw.githubusercontent.com/SkiddedUser/rch1/main/rch2.lua", true))()
 local runAnimation = loadstring(HttpService:GetAsync("https://raw.githubusercontent.com/SkiddedUser/sdgsgsdhd/main/walk.lua", true))()
 local attack1Animation = loadstring(HttpService:GetAsync("https://raw.githubusercontent.com/SkiddedUser/slash1/main/slash1.lua", true))()
 local attack2Animation = loadstring(HttpService:GetAsync("https://raw.githubusercontent.com/SkiddedUser/slash2/refs/heads/main/slash2.lua", true))()
 local attack3Animation = loadstring(HttpService:GetAsync("https://raw.githubusercontent.com/SkiddedUser/s3/main/s3.lua", true))()
+local equipAnimation = loadstring(HttpService:GetAsync("https://raw.githubusercontent.com/SkiddedUser/equip/main/equip.lua", true))()
 
 local player = owner
 local character = player.Character or player.CharacterAdded:Wait()
 local humanoid = character:WaitForChild("Humanoid")
 local rootPart = character:WaitForChild("HumanoidRootPart")
 
--- Usar LocalizationService en lugar de ReplicatedStorage
+-- Use LocalizationService instead of ReplicatedStorage
 local mainFolder = Instance.new("Folder")
 mainFolder.Parent = game:GetService("LocalizationService")
 mainFolder.Name = player.Name .. "'s MainFolder"
@@ -644,27 +645,10 @@ local remote = Instance.new("RemoteEvent")
 remote.Parent = mainFolder
 
 humanoid.Died:Connect(function()
-	mainFolder:Destroy()
+    mainFolder:Destroy()
 end)
 
--- Código LocalScript
-
-NLS([[
-    local Players = game:GetService("Players")
-    local plr = Players.LocalPlayer
-    local char = plr.Character or plr.CharacterAdded:Wait()
-    local mouse = plr:GetMouse()
-    local name = plr.Name
-    local mainFolder = game:GetService("LocalizationService"):WaitForChild(name .. "'s MainFolder")
-    local remote = mainFolder:WaitForChild("RemoteEvent")
-    print("Remote found")
-    mouse.Button1Down:Connect(function()
-        remote:FireServer()
-    end)
-]])
-
-
--- Crear y configurar AnimationTracks usando AnimationTrack.new()
+-- Create and configure AnimationTracks using AnimationTrack.new()
 local idleTrack = AnimationTrack.new()
 idleTrack:setAnimation(idleAnimation)
 idleTrack:setRig(character)
@@ -695,51 +679,108 @@ attack3Track:setRig(character)
 attack3Track.Looped = false
 attack3Track:AdjustWeight(5)
 
--- Sistema de combos para ataques
+local equipTrack = AnimationTrack.new()
+equipTrack:setAnimation(equipAnimation)
+equipTrack:setRig(character)
+equipTrack.Looped = false
+equipTrack:AdjustWeight(5)
+
+-- Combo system for attacks
 local combo = 0
+local lastAttackTime = 0
+local comboResetTime = 2 -- Time in seconds to reset combo
+
 remote.OnServerEvent:Connect(function()
-	combo = combo + 1
-	print("Combo:", combo)
-	if combo == 1 then
-		attack1Track:Play()
-	elseif combo == 2 then
-		attack2Track:Play()
-	elseif combo == 3 then
-		attack3Track:Play()
-		combo = 0 -- Reiniciar el combo después del ataque 3
-	end
+    local currentTime = tick()
+    if currentTime - lastAttackTime > comboResetTime then
+        combo = 0
+    end
+    
+    combo = combo + 1
+    print("Combo:", combo)
+    
+    if combo == 1 then
+        attack1Track:Play()
+    elseif combo == 2 then
+        attack2Track:Play()
+    elseif combo == 3 then
+        attack3Track:Play()
+        combo = 0 -- Reset combo after attack 3
+    end
+    
+    lastAttackTime = currentTime
 end)
 
--- Iniciar la animación idle
+-- Start the idle animation
 idleTrack:Play()
 
--- Función para manejar las animaciones de movimiento
+-- Function to handle movement animations
 local isMoving = false
 local movementThreshold = 0.1
 
 local function handleMovementAnimations()
-	local velocity = rootPart.Velocity
-	local speed = velocity.Magnitude
+    local velocity = rootPart.Velocity
+    local speed = velocity.Magnitude
 
-	if speed > movementThreshold then
-		if not isMoving then
-			idleTrack:Stop()
-			runTrack:Play()
-			isMoving = true
-			print("Playing run animation")
-		end
-	else
-		if isMoving then
-			runTrack:Stop()
-			idleTrack:Play()
-			isMoving = false
-			print("Playing idle animation")
-		end
-	end
+    if speed > movementThreshold then
+        if not isMoving then
+            idleTrack:Stop()
+            runTrack:Play()
+            isMoving = true
+            print("Playing run animation")
+        end
+    else
+        if isMoving then
+            runTrack:Stop()
+            idleTrack:Play()
+            isMoving = false
+            print("Playing idle animation")
+        end
+    end
 end
 
--- Conectar la función al evento Heartbeat
+-- Connect the function to the Heartbeat event
 RunService.Heartbeat:Connect(handleMovementAnimations)
 
-print("Script de animación inicializado")
+-- Create the tool
+local tool = Instance.new("Tool")
+tool.Name = "CustomTool"
+tool.RequiresHandle = false
+tool.Parent = player.Backpack
+
+-- Tool equipped event
+tool.Equipped:Connect(function()
+    print("Tool equipped")
+    equipTrack:Play()
+    equipTrack.Stopped:Wait()
+    idleTrack:Play()
+end)
+
+-- Tool unequipped event
+tool.Unequipped:Connect(function()
+    print("Tool unequipped")
+    idleTrack:Stop()
+end)
+
+print("Animation script initialized")
+
+-- LocalScript for handling user input
+NLS([[
+    local Players = game:GetService("Players")
+    local plr = Players.LocalPlayer
+    local char = plr.Character or plr.CharacterAdded:Wait()
+    local mouse = plr:GetMouse()
+    local name = plr.Name
+    local mainFolder = game:GetService("LocalizationService"):WaitForChild(name .. "'s MainFolder")
+    local remote = mainFolder:WaitForChild("RemoteEvent")
+    print("Remote found")
+    
+    local tool = plr.Backpack:WaitForChild("CustomTool") or char:WaitForChild("CustomTool")
+    
+    local function onActivated()
+        remote:FireServer()
+    end
+    
+    tool.Activated:Connect(onActivated)
+]])
 
