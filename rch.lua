@@ -623,29 +623,27 @@ local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
 local HttpService = game:GetService("HttpService")
 
--- Función para cargar y configurar animaciones con manejo de errores
+-- Función para cargar y configurar animaciones con manejo de errores y depuración
 local function loadAnimation(url, looped)
+    print("Attempting to load animation from: " .. url)
     local success, result = pcall(function()
         local animationData = HttpService:GetAsync(url, true)
-        if type(animationData) ~= "string" then
-            error("Invalid animation data received")
-        end
+        print("Animation data received, length: " .. #animationData)
         
         local loadedAnimation = loadstring(animationData)()
-        if type(loadedAnimation) ~= "table" then
-            error("Loaded animation is not a valid table")
-        end
+        print("Animation loaded, type: " .. type(loadedAnimation))
         
         local animationTrack = AnimationTrack.new()
         animationTrack.Looped = looped
         animationTrack:setAnimation(loadedAnimation)
+        print("Animation track created and animation set")
         
-        -- Asegurarse de que el personaje existe antes de intentar establecer el rig
         local character = owner.Character
         if not character then
             error("Character not found")
         end
         animationTrack:setRig(character)
+        print("Animation rig set to character")
         
         return animationTrack
     end)
@@ -655,6 +653,7 @@ local function loadAnimation(url, looped)
         return nil
     end
     
+    print("Animation successfully loaded and configured")
     return result
 end
 
@@ -713,8 +712,10 @@ remote.OnServerEvent:Connect(function()
     combo = combo + 1
     print("Combo:", combo)
     if combo == 1 and attack1Track then
+        print("Playing attack1 animation")
         attack1Track:Play()
     elseif combo == 2 and attack2Track then
+        print("Playing attack2 animation")
         attack2Track:Play()
     end
     if combo > 2 then
@@ -724,29 +725,35 @@ end)
 
 -- Iniciar la animación idle
 if idleTrack then
+    print("Playing initial idle animation")
     idleTrack:Play()
 end
 
 -- Función para manejar las animaciones de movimiento
 local function handleMovementAnimations()
-    if not (rootPart and idleTrack and runTrack) then return end
+    if not (rootPart and idleTrack and runTrack) then 
+        print("Missing required objects for movement animations")
+        return 
+    end
     
     local velocity = rootPart.Velocity
     local speed = velocity.Magnitude
 
     if speed > movementThreshold then
         if not isMoving then
+            print("Stopping idle animation")
             idleTrack:Stop()
+            print("Playing run animation")
             runTrack:Play()
             isMoving = true
-            print("Playing run animation")
         end
     else
         if isMoving then
+            print("Stopping run animation")
             runTrack:Stop()
+            print("Playing idle animation")
             idleTrack:Play()
             isMoving = false
-            print("Playing idle animation")
         end
     end
 end
