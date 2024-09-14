@@ -698,6 +698,8 @@ remote.OnServerEvent:Connect(function()
 	elseif combo == 3 then
 		attack3Track:Play()
 		combo = 0 -- Reiniciar el combo después del ataque 3
+	else
+		combo = 0 -- Reiniciar el combo si el valor es mayor que 3 (opcional)
 	end
 end)
 
@@ -730,3 +732,4 @@ end
 RunService.Heartbeat:Connect(handleMovementAnimations)
 
 print("Script de animación inicializado")
+
