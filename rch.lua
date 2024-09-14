@@ -751,56 +751,38 @@ end)
 ]])
 
 NLS([[
-   task.wait()
-if game.Players.LocalPlayer.Character then
-	local camera = workspace.CurrentCamera
+  local Player = game.Players.LocalPlayer
+local function setupCharacter(character)
+	local Torso = character:WaitForChild'Torso'
+	local Neck = Torso:WaitForChild("Neck")
+	local LeftShoulder = Torso:WaitForChild("Left Shoulder")
+	local RightShoulder = Torso:WaitForChild("Right Shoulder")
+	local Humanoid = character:WaitForChild("Humanoid")
+	Humanoid.AutoRotate = true -- Permitir que el personaje se mueva y gire libremente
+	local Mouse = Player:GetMouse()
 
-	local player = game.Players.LocalPlayer
-	local character = player.Character
+	local NeckC0 = Neck.C0
+	local RS_C0 = RightShoulder.C0
+	local LS_C0 = LeftShoulder.C0
 
-	local hrp = character:WaitForChild("HumanoidRootPart")
-	local humanoid = character:WaitForChild("Humanoid")
+	game:GetService("RunService").RenderStepped:Connect(function()
+		if not character or not character.Parent then return end
+		local camera = workspace.CurrentCamera
+		local lookVector = (Mouse.Hit.p - camera.CFrame.p).unit
+		local angle = -math.asin(lookVector.y)  -- Invertir el ángulo
 
-	local UIS = game:GetService("UserInputService")
-	local runService = game:GetService("RunService")
+		-- Actualizamos las articulaciones de los brazos
+		RightShoulder.C0 = RS_C0 * CFrame.Angles(0, 0, -angle)  -- Invertir el ángulo para el brazo derecho
+		LeftShoulder.C0 = LS_C0 * CFrame.Angles(0, 0, angle)  -- Invertir el ángulo para el brazo izquierdo
 
-	local part = Instance.new("Part")
-	part.Anchored = true
-	part.CanCollide = false
-	part.Transparency = 1
-	part.Name = "cameraPart"
-	part.Parent = workspace
-
-	camera.CameraSubject = part
-
-	local lastPosition = character.Head.Position
-	local lastUpdateTime = tick()
-
-	runService.Heartbeat:Connect(function()
-		if character.Head and humanoid then
-			local currentPosition = character.Head.Position
-			local currentTime = tick()
-			local deltaTime = currentTime - lastUpdateTime
-
-			-- Calcular la velocidad del personaje
-			local characterVelocity = (currentPosition - lastPosition) / deltaTime
-
-			-- Ajustar el valor de slerp según la velocidad del personaje
-			local slerpAlpha = math.min(0.1 + characterVelocity.Magnitude / 50, 0.5) -- Ajusta los valores según sea necesario
-
-			-- Interpolación esférica para suavizar la transición
-			part.CFrame = CFrame.new(part.Position):lerp(CFrame.new(character.Head.Position), slerpAlpha)
-
-			lastPosition = currentPosition
-			lastUpdateTime = currentTime
-		end
+		-- Actualizamos el cuello
+		Neck.C0 = NeckC0 * CFrame.Angles(angle, 0, 0)  -- Invertir el ángulo para el cuello
 	end)
+end
 
-	runService.RenderStepped:Connect(function()
-		if UIS.MouseBehavior == Enum.MouseBehavior.LockCenter then
-			hrp.CFrame = CFrame.lookAt(hrp.Position, hrp.Position + Vector3.new(camera.CFrame.LookVector.X, 0, camera.CFrame.LookVector.Z))
-		end
-	end)
+Player.CharacterAdded:Connect(setupCharacter)
+if Player.Character then
+	setupCharacter(Player.Character)
 end
 
 ]])
