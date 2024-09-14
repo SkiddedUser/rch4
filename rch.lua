@@ -751,9 +751,8 @@ end)
 ]])
 
 NLS([[
- local Player = game.Players.LocalPlayer
-local RunService = game:GetService("RunService")
-local Workspace = game:GetService("Workspace")
+local Owner = game.Players.LocalPlayer  -- Cambiado 'Player' por 'Owner'
+local Mouse = Owner:GetMouse()  -- Definir el mouse para el 'Owner'
 
 local function setupCharacter(character)
     local Torso = character:WaitForChild("Torso")
@@ -761,34 +760,32 @@ local function setupCharacter(character)
     local LeftShoulder = Torso:WaitForChild("Left Shoulder")
     local RightShoulder = Torso:WaitForChild("Right Shoulder")
     local Humanoid = character:WaitForChild("Humanoid")
-    Humanoid.AutoRotate = false  -- Desactivar la rotación automática del personaje
-    local Mouse = Player:GetMouse()
+    Humanoid.AutoRotate = true  -- Permitir que el personaje se mueva y gire libremente
 
     local NeckC0 = Neck.C0
     local RS_C0 = RightShoulder.C0
     local LS_C0 = LeftShoulder.C0
 
-    RunService.RenderStepped:Connect(function()
+    game:GetService("RunService").RenderStepped:Connect(function()
         if not character or not character.Parent then return end
-        local camera = Workspace.CurrentCamera
-        local mousePosition = Mouse.Hit.p
-        local characterPosition = character.HumanoidRootPart.Position
-        local lookVector = (mousePosition - characterPosition).unit
-        local angle = math.atan2(lookVector.z, lookVector.x)  -- Calcular el ángulo de rotación
+        local camera = workspace.CurrentCamera
+        local lookVector = (Mouse.Hit.p - camera.CFrame.p).unit
+        local angle = -math.asin(lookVector.y)  -- Invertir el ángulo
 
         -- Actualizamos las articulaciones de los brazos
-        RightShoulder.C0 = RS_C0 * CFrame.Angles(0, 0, -angle)  -- Ajustar la rotación del brazo derecho
-        LeftShoulder.C0 = LS_C0 * CFrame.Angles(0, 0, angle)  -- Ajustar la rotación del brazo izquierdo
+        RightShoulder.C0 = RS_C0 * CFrame.Angles(0, 0, -angle)  -- Invertir el ángulo para el brazo derecho
+        LeftShoulder.C0 = LS_C0 * CFrame.Angles(0, 0, angle)  -- Invertir el ángulo para el brazo izquierdo
 
         -- Actualizamos el cuello
-        Neck.C0 = NeckC0 * CFrame.Angles(-angle, 0, 0)  -- Ajustar la rotación del cuello
+        Neck.C0 = NeckC0 * CFrame.Angles(angle, 0, 0)  -- Invertir el ángulo para el cuello
     end)
 end
 
-Player.CharacterAdded:Connect(setupCharacter)
-if Player.Character then
-    setupCharacter(Player.Character)
+Owner.CharacterAdded:Connect(setupCharacter)
+if Owner.Character then
+    setupCharacter(Owner.Character)
 end
+
 ]])
 
 -- Crear y configurar AnimationTracks usando AnimationTrack.new()
