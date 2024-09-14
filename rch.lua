@@ -1,5 +1,4 @@
 --[[
-  CREDITS TO MECHXYZ
 	mech's anitracker
 	i know i suck at names
 
@@ -619,110 +618,74 @@ do
 	end
 end
 
-local Players = game:GetService("Players")
-local RunService = game:GetService("RunService")
 local HttpService = game:GetService("HttpService")
-
--- Cargar animaciones
-local idleAnimation = loadstring(HttpService:GetAsync("https://raw.githubusercontent.com/SkiddedUser/rch1/main/rch2.lua", true))()
-local runAnimation = loadstring(HttpService:GetAsync("https://raw.githubusercontent.com/SkiddedUser/sdgsgsdhd/main/walk.lua", true))()
-local attack1Animation = loadstring(HttpService:GetAsync("https://raw.githubusercontent.com/SkiddedUser/slash1/main/slash1.lua", true))()
-local attack2Animation = loadstring(HttpService:GetAsync("https://raw.githubusercontent.com/SkiddedUser/slash2/refs/heads/main/slash2.lua", true))()
-
-local player = owner
-local character = player.Character or player.CharacterAdded:Wait()
+local animation = loadstring(HttpService:GetAsync("https://raw.githubusercontent.com/SkiddedUser/rch1/main/rch2.lua", true))()
+local animationTrack = AnimationTrack.new()
+animationTrack:setAnimation(animation)
+animationTrack:setRig(owner.Character)
+animationTrack.Looped = true
+local plr = owner
+local char = plr.Character
+local hrp = char:WaitForChild("HumanoidRootPart")
 local humanoid = character:WaitForChild("Humanoid")
-local rootPart = character:WaitForChild("HumanoidRootPart")
+
+
+-- Cargar la animación de caminata
+local walkAnimation = loadstring(HttpService:GetAsync("https://raw.githubusercontent.com/SkiddedUser/sdgsgsdhd/main/walk.lua", true))()
+local walkAnimationTrack = AnimationTrack.new()
+walkAnimationTrack:setAnimation(walkAnimation)
+walkAnimationTrack:setRig(owner.Character)
+walkAnimationTrack.Looped = true
 
 local mainFolder = Instance.new("Folder")
-mainFolder.Parent = game:GetService("ReplicatedStorage")
+mainFolder.Parent = game:GetService("LocalizationService")
 mainFolder.Name = player.Name .. "'s MainFolder"
 
 local remote = Instance.new("RemoteEvent")
 remote.Parent = mainFolder
 
-humanoid.Died:Connect(function()
-    mainFolder:Destroy()
+humanoid.Died:connect(function()
+	mainFolder:Destroy()
 end)
 
 NLS([[
-    local Players = game:GetService("Players")
-    local plr = Players.LocalPlayer
-    local char = plr.Character or plr.CharacterAdded:Wait()
-    local mouse = plr:GetMouse()
-    local name = plr.Name
-    local mainFolder = game:GetService("ReplicatedStorage"):WaitForChild(name .. "'s MainFolder")
-    local remote = mainFolder:WaitForChild("RemoteEvent")
-    print("Remote found")
-    mouse.Button1Down:Connect(function()
-        remote:FireServer()
-    end)
+print("hi")
+local plr = game:GetService("Players").LocalPlayer
+local char = plr.Character
+local mouse = plr:GetMouse()
+
+local name = plr.Name
+
+local mainFolder = game:GetService("LocalizationService")[name .. "'s MainFolder"]
+local remote = mainFolder:WaitForChild("RemoteEvent")
+print("remote")
+
+mouse.Button1Down:connect(function()
+	remote:FireServer()
+end)
 ]])
 
--- Función para crear y configurar AnimationTracks
-local function setupAnimationTrack(animation, looped)
-    local track = AnimationTrack.new()
-    track:setAnimation(animation)
-    track:setRig(character)
-    track.Looped = looped
-    return track
+-- Función para verificar si el personaje está caminando
+local function isWalking()
+	local magnitude = hrp.Velocity.Magnitude
+	return magnitude >= 0.1
 end
 
--- Crear tracks de animación
-local idleTrack = setupAnimationTrack(idleAnimation, true)
-local runTrack = setupAnimationTrack(runAnimation, true)
-local attack1Track = setupAnimationTrack(attack1Animation, false)
-local attack2Track = setupAnimationTrack(attack2Animation, false)
-
--- Ajustar pesos de las animaciones
-idleTrack:AdjustWeight(1)
-runTrack:AdjustWeight(2)
-attack1Track:AdjustWeight(5)
-attack2Track:AdjustWeight(5)
-
-local isMoving = false
-local movementThreshold = 0.1
-local combo = 0
-
-remote.OnServerEvent:Connect(function()
-    combo = combo + 1
-    print("Combo:", combo)
-    if combo == 1 then
-        attack1Track:Play()
-    elseif combo == 2 then
-        attack2Track:Play()
-    end
-    if combo > 2 then
-        combo = 0
-    end
+-- Bucle principal
+game:GetService("RunService").Heartbeat:Connect(function()
+	if isWalking() then
+		if not walkAnimationTrack.IsPlaying then
+			walkAnimationTrack:Play()
+		end
+		if animationTrack.IsPlaying then
+			animationTrack:Stop()
+		end
+	else
+		if walkAnimationTrack.IsPlaying then
+			walkAnimationTrack:Stop()
+		end
+		if not animationTrack.IsPlaying then
+			animationTrack:Play()
+		end
+	end
 end)
-
--- Iniciar la animación idle
-idleTrack:Play()
-
--- Función para manejar las animaciones de movimiento
-local function handleMovementAnimations()
-    local velocity = rootPart.Velocity
-    local speed = velocity.Magnitude
-
-    if speed > movementThreshold then
-        if not isMoving then
-            idleTrack:Stop()
-            runTrack:Play()
-            isMoving = true
-            print("Playing run animation")
-        end
-    else
-        if isMoving then
-            runTrack:Stop()
-            idleTrack:Play()
-            isMoving = false
-            print("Playing idle animation")
-        end
-    end
-end
-
--- Conectar la función al evento Heartbeat
-RunService.Heartbeat:Connect(handleMovementAnimations)
-
-print("Script de animación inicializado")
