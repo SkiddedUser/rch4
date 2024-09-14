@@ -619,6 +619,7 @@ do
 	end
 end
 
+-- Variables de servicios
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
 local HttpService = game:GetService("HttpService")
@@ -631,22 +632,28 @@ local attack2Animation = loadstring(HttpService:GetAsync("https://raw.githubuser
 local attack3Animation = loadstring(HttpService:GetAsync("https://raw.githubusercontent.com/SkiddedUser/s3/main/s3.lua", true))()
 local EquipTool = loadstring(HttpService:GetAsync("https://raw.githubusercontent.com/SkiddedUser/equip/main/equip.lua", true))()
 
+-- Referencias al jugador y su personaje
 local player = owner
 local character = player.Character or player.CharacterAdded:Wait()
 local humanoid = character:WaitForChild("Humanoid")
 local rootPart = character:WaitForChild("HumanoidRootPart")
 
+-- Crear una carpeta para almacenar eventos remotos
 local mainFolder = Instance.new("Folder")
 mainFolder.Parent = game:GetService("ReplicatedStorage")
 mainFolder.Name = player.Name .. "'s MainFolder"
 
+-- Crear el evento remoto
 local remote = Instance.new("RemoteEvent")
+remote.Name = "RemoteEvent"
 remote.Parent = mainFolder
 
+-- Destruir la carpeta cuando el humanoide muera
 humanoid.Died:Connect(function()
 	mainFolder:Destroy()
 end)
 
+-- LocalScript para manejar el clic del mouse en el cliente
 NLS([[
     local Players = game:GetService("Players")
     local plr = Players.LocalPlayer
@@ -655,17 +662,18 @@ NLS([[
     local name = plr.Name
     local mainFolder = game:GetService("ReplicatedStorage"):WaitForChild(name .. "'s MainFolder")
     local remote = mainFolder:WaitForChild("RemoteEvent")
+    
     print("Remote found")
+    
+    -- Detectar clic izquierdo del mouse y enviar un evento al servidor
     mouse.Button1Down:Connect(function()
         remote:FireServer()
     end)
-]])
+]], player.Backpack) -- Asignar el LocalScript al Backpack para que se ejecute correctamente
 
 -- Función para crear y configurar AnimationTracks
 local function setupAnimationTrack(animation, looped)
-	local track = AnimationTrack.new()
-	track:setAnimation(animation)
-	track:setRig(character)
+	local track = humanoid:LoadAnimation(animation)
 	track.Looped = looped
 	return track
 end
@@ -675,17 +683,20 @@ local idleTrack = setupAnimationTrack(idleAnimation, true)
 local runTrack = setupAnimationTrack(runAnimation, true)
 local attack1Track = setupAnimationTrack(attack1Animation, false)
 local attack2Track = setupAnimationTrack(attack2Animation, false)
+local attack3Track = setupAnimationTrack(attack3Animation, false)
 
 -- Ajustar pesos de las animaciones
 idleTrack:AdjustWeight(1)
 runTrack:AdjustWeight(2)
 attack1Track:AdjustWeight(5)
 attack2Track:AdjustWeight(5)
+attack3Track:AdjustWeight(5)
 
 local isMoving = false
 local movementThreshold = 0.1
 local combo = 0
 
+-- Manejar el evento remoto para ataques
 remote.OnServerEvent:Connect(function()
 	combo = combo + 1
 	print("Combo:", combo)
@@ -693,9 +704,9 @@ remote.OnServerEvent:Connect(function()
 		attack1Track:Play()
 	elseif combo == 2 then
 		attack2Track:Play()
-	end
-	if combo > 2 then
-		combo = 0
+	elseif combo == 3 then
+		attack3Track:Play()
+		combo = 0 -- Reiniciar el combo después del ataque 3
 	end
 end)
 
@@ -726,5 +737,8 @@ end
 
 -- Conectar la función al evento Heartbeat
 RunService.Heartbeat:Connect(handleMovementAnimations)
+
+print("Script de animación inicializado")
+
 
 print("Script de animación inicializado")
