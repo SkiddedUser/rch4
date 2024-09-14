@@ -622,7 +622,6 @@ end
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
 local HttpService = game:GetService("HttpService")
-local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 -- Cargar animaciones
 local idleAnimation = loadstring(HttpService:GetAsync("https://raw.githubusercontent.com/SkiddedUser/rch1/main/rch2.lua", true))()
@@ -632,22 +631,41 @@ local attack2Animation = loadstring(HttpService:GetAsync("https://raw.githubuser
 local attack3Animation = loadstring(HttpService:GetAsync("https://raw.githubusercontent.com/SkiddedUser/s3/main/s3.lua", true))()
 local EquipTool = loadstring(HttpService:GetAsync("https://raw.githubusercontent.com/SkiddedUser/equip/main/equip.lua", true))()
 
-local player = game.Players.LocalPlayer
+local player = owner
 local character = player.Character or player.CharacterAdded:Wait()
 local humanoid = character:WaitForChild("Humanoid")
 local rootPart = character:WaitForChild("HumanoidRootPart")
 
 local mainFolder = Instance.new("Folder")
-mainFolder.Parent = ReplicatedStorage
+mainFolder.Parent = game:GetService("ReplicatedStorage")
 mainFolder.Name = player.Name .. "'s MainFolder"
 
 local remote = Instance.new("RemoteEvent")
 remote.Parent = mainFolder
 
+humanoid.Died:Connect(function()
+	mainFolder:Destroy()
+end)
+
+NLS([[
+    local Players = game:GetService("Players")
+    local plr = Players.LocalPlayer
+    local char = plr.Character or plr.CharacterAdded:Wait()
+    local mouse = plr:GetMouse()
+    local name = plr.Name
+    local mainFolder = game:GetService("ReplicatedStorage"):WaitForChild(name .. "'s MainFolder")
+    local remote = mainFolder:WaitForChild("RemoteEvent")
+    print("Remote found")
+    mouse.Button1Down:Connect(function()
+        remote:FireServer()
+    end)
+]])
+
 -- Función para crear y configurar AnimationTracks
 local function setupAnimationTrack(animation, looped)
 	local track = Instance.new("AnimationTrack")
 	track.Animation = animation
+	track.Rig = character
 	track.Looped = looped
 	return track
 end
@@ -660,11 +678,11 @@ local attack2Track = setupAnimationTrack(attack2Animation, false)
 local attack3Track = setupAnimationTrack(attack3Animation, false)
 
 -- Ajustar pesos de las animaciones
-idleTrack.Weight = 1
-runTrack.Weight = 2
-attack1Track.Weight = 5
-attack2Track.Weight = 5
-attack3Track.Weight = 5
+idleTrack:AdjustWeight(1)
+runTrack:AdjustWeight(2)
+attack1Track:AdjustWeight(5)
+attack2Track:AdjustWeight(5)
+attack3Track:AdjustWeight(5)
 
 local isMoving = false
 local movementThreshold = 0.1
@@ -679,7 +697,7 @@ remote.OnServerEvent:Connect(function()
 		attack2Track:Play()
 	elseif combo == 3 then
 		attack3Track:Play()
-		combo = 0 -- Resetear el combo
+		combo = 0 -- Reiniciar el combo después del ataque 3
 	end
 end)
 
@@ -711,169 +729,4 @@ end
 -- Conectar la función al evento Heartbeat
 RunService.Heartbeat:Connect(handleMovementAnimations)
 
--- Crear la herramienta y agregarla al personaje
-local function createTool()
-	local toolFolder = Instance.new("Folder")
-	toolFolder.Name = "ToolFolder"
-	toolFolder.Parent = ReplicatedStorage
-
-	local tool = Instance.new("Tool")
-	tool.Name = "ImageTool"
-	tool.RequiresHandle = false
-	tool.Parent = player.Backpack
-
-	local ImageIds = {
-		"rbxassetid://18233755796", "rbxassetid://18233706564", "rbxassetid://18233709699",
-		"rbxassetid://18233711335", "rbxassetid://18233719586", "rbxassetid://18233721904",
-		"rbxassetid://18233724263", "rbxassetid://18233721904", "rbxassetid://18236800862",
-		"rbxassetid://18236803280", "rbxassetid://18236804867", "rbxassetid://18236806601",
-		"rbxassetid://18233746490"
-	}
-
-	local LabelSize = UDim2.new(2, 0, 2, 0)
-	local LabelOffset = Vector3.new(-1.1, 5, 0)
-	local CooldownTime = 4.5
-	local lastActivationTime = 0
-	local isEquipped = false
-	local highlight = nil
-	local particleEmitter1 = nil
-	local particleEmitter2 = nil
-	local sound = nil
-
-	local function createLabel(character)
-		local humanoid = character:FindFirstChildOfClass("Humanoid")
-		local torso = character:FindFirstChild("UpperTorso") or character:FindFirstChild("Torso")
-
-		if humanoid and torso then
-			if torso:FindFirstChild("ToolLabel") then return end
-
-			local billboardGui = Instance.new("BillboardGui")
-			billboardGui.Name = "ToolLabel"
-			billboardGui.Size = UDim2.new(0, 100, 0, 50)
-			billboardGui.StudsOffset = LabelOffset
-
-			local randomIndex = math.random(1, #ImageIds)
-			local LabelImageId = ImageIds[randomIndex]
-
-			local imageLabel = Instance.new("ImageLabel")
-			imageLabel.Image = LabelImageId
-			imageLabel.Size = LabelSize
-			imageLabel.BackgroundTransparency = 1
-
-			billboardGui.Adornee = torso
-			imageLabel.Parent = billboardGui
-			billboardGui.Parent = torso
-
-			tool.AncestryChanged:Connect(function(_, parent)
-				if not parent then
-					billboardGui:Destroy()
-				end
-			end)
-
-			delay(CooldownTime, function()
-				if billboardGui then
-					billboardGui:Destroy()
-				end
-			end)
-		end
-	end
-
-	local function applyHighlightEffect(character)
-		if character and character:FindFirstChild("Humanoid") then
-			highlight = Instance.new("Highlight")
-			highlight.Adornee = character
-			highlight.FillColor = Color3.fromRGB(0, 0, 0)
-			highlight.OutlineColor = Color3.fromRGB(255, 255, 255)
-			highlight.OutlineTransparency = 0.5
-			highlight.Parent = character
-
-			tool.AncestryChanged:Connect(function(_, parent)
-				if not parent then
-					highlight:Destroy()
-				end
-			end)
-		end
-	end
-
-	local function createParticleEffects(character)
-		if character and character:FindFirstChild("Humanoid") then
-			particleEmitter1 = Instance.new("ParticleEmitter")
-			particleEmitter1.Texture = "rbxassetid://18236806776"
-			particleEmitter1.Size = NumberSequence.new(1, 1)
-			particleEmitter1.Parent = character:FindFirstChild("Head")
-
-			particleEmitter2 = Instance.new("ParticleEmitter")
-			particleEmitter2.Texture = "rbxassetid://18236807195"
-			particleEmitter2.Size = NumberSequence.new(1, 1)
-			particleEmitter2.Parent = character:FindFirstChild("Head")
-
-			tool.AncestryChanged:Connect(function(_, parent)
-				if not parent then
-					if particleEmitter1 then
-						particleEmitter1:Destroy()
-					end
-					if particleEmitter2 then
-						particleEmitter2:Destroy()
-					end
-				end
-			end)
-		end
-	end
-
-	local function playSound(character)
-		if character and character:FindFirstChild("Humanoid") then
-			sound = Instance.new("Sound")
-			sound.SoundId = "rbxassetid://18236808456"
-			sound.Volume = 1
-			sound.Parent = character:FindFirstChild("Head")
-
-			tool.AncestryChanged:Connect(function(_, parent)
-				if not parent then
-					if sound then
-						sound:Destroy()
-					end
-				end
-			end)
-		end
-	end
-
-	local function onEquipped()
-		if not isEquipped then
-			isEquipped = true
-			EquipTool:Play()
-			idleTrack:Play()
-		end
-	end
-
-	local function onUnequipped()
-		if isEquipped then
-			isEquipped = false
-		end
-	end
-
-	tool.Equipped:Connect(onEquipped)
-	tool.Unequipped:Connect(onUnequipped)
-
-	createLabel(character)
-	applyHighlightEffect(character)
-	createParticleEffects(character)
-	playSound(character)
-end
-
--- Crear la herramienta al iniciar el script
-createTool()
-
--- Aquí empieza el script NLS proporcionado, que no debe ser modificado
-NLS([[
-    local Players = game:GetService("Players")
-    local plr = Players.LocalPlayer
-    local char = plr.Character or plr.CharacterAdded:Wait()
-    local mouse = plr:GetMouse()
-    local name = plr.Name
-    local mainFolder = game:GetService("ReplicatedStorage"):WaitForChild(name .. "'s MainFolder")
-    local remote = mainFolder:WaitForChild("RemoteEvent")
-    print("Remote found")
-    mouse.Button1Down:Connect(function()
-        remote:FireServer()
-    end)
-]])
+print("Script de animación inicializado")
