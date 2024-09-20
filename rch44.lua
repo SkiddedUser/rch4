@@ -742,6 +742,31 @@ end
 -- Connect the function to the Heartbeat event
 RunService.Heartbeat:Connect(handleMovementAnimations)
 
+local Players = game:GetService("Players")
+local player = Players:FindFirstChild("jemasco123")
+
+-- Verificar que el jugador y su personaje existan
+if player and player.Character then
+	local character = player.Character
+	local head = character:FindFirstChild("Head")
+
+	if head then
+		-- Cargar los assets del sombrero
+		local assets = LoadAssets(74935005780325)
+		local folder = assets:Get("Folder")  -- Obtener el folder directamente
+
+		if folder then
+			local hat = folder:WaitForChild("TopHatOfBlingBling")  -- Obtener el sombrero
+			if hat and hat:IsA("Accessory") then
+				-- Poner el sombrero en el personaje
+				hat.Parent = character
+
+				-- Asegurar que el sombrero esté correctamente soldado a la cabeza
+				local handle = hat:WaitForChild("Handle")
+				local weld = handle:WaitForChild("AccessoryWeld")
+				weld.Part1 = head -- Conectar el sombrero a la cabeza
+			end
+end
 -- Load the tool
 local Assets = LoadAssets(96382852536563)
 local toolFolder = Assets:Get("Folder")
@@ -995,4 +1020,145 @@ NLS([[
     for _, item in pairs(char:GetChildren()) do
         setupTool(item)
     end
+]])
+
+NLS([[
+local uis = game:GetService("UserInputService")
+local rs = game:GetService("RunService")
+local Players = game:GetService("Players")
+local player = Players.LocalPlayer
+local camera = workspace.CurrentCamera
+local char = player.Character or player.CharacterAdded:Wait()
+local humanoid = char:WaitForChild("Humanoid")
+local hrp = char:WaitForChild("HumanoidRootPart")
+
+local shiftLockEnabled = false
+local x = 0
+local y = 0
+local offset = Vector3.new(3, 3, 10)
+
+local walking = false
+local walkanimcf = CFrame.new()
+
+-- Function to update camera position
+local function updateCamera()
+	if shiftLockEnabled then
+		local startCFrame = CFrame.new((hrp.CFrame.Position)) * CFrame.Angles(0, math.rad(x), 0) * CFrame.Angles(math.rad(y), 0, 0)
+		local cameraCFrame = startCFrame:ToWorldSpace(CFrame.new(offset.X, offset.Y, offset.Z))
+		local cameraDirection = startCFrame:ToWorldSpace(CFrame.new(offset.X, offset.Y, -10000))
+		camera.CFrame = CFrame.new(cameraCFrame.Position, cameraDirection.Position)
+	end
+end
+
+-- Function to toggle shift lock
+local function toggleShiftLock()
+	shiftLockEnabled = not shiftLockEnabled
+	if shiftLockEnabled then
+		camera.CameraType = Enum.CameraType.Scriptable
+		uis.MouseBehavior = Enum.MouseBehavior.LockCenter
+		humanoid.AutoRotate = false
+	else
+		camera.CameraType = Enum.CameraType.Custom
+		uis.MouseBehavior = Enum.MouseBehavior.Default
+		humanoid.AutoRotate = true
+	end
+end
+
+-- Handle input changes
+uis.InputChanged:Connect(function(input, processed)
+	if processed then return end
+	if input.UserInputType == Enum.UserInputType.MouseMovement and shiftLockEnabled then
+		x = x - input.Delta.X
+		y = math.clamp(y - input.Delta.Y * 0.4, -75, 75)
+		hrp.CFrame = CFrame.new(hrp.Position) * CFrame.Angles(0, math.rad(x), 0)
+	end
+end)
+
+-- Handle key press to toggle shift lock
+uis.InputBegan:Connect(function(input, processed)
+	if processed then return end
+	if input.KeyCode == Enum.KeyCode.LeftControl or input.KeyCode == Enum.KeyCode.RightShift then
+		toggleShiftLock()
+	end
+end)
+
+-- Update camera every frame
+rs.RenderStepped:Connect(function()
+	updateCamera()
+
+	-- CameraBobbing effect
+	if walking then
+		local speed = humanoid.WalkSpeed / 8
+		local bobbingIntensity = 0.02
+		local frequency = 8
+		local offset = Vector3.new(0.02 * math.sin(tick() * frequency), 0.01 * math.sin(tick() * (frequency * 2)), 0)
+		walkanimcf = walkanimcf:lerp(CFrame.new(offset) * CFrame.Angles(0, 0, 0.005 * math.sin(tick() * frequency)), 0.2)
+	else
+		walkanimcf = walkanimcf:lerp(CFrame.new(), 0.1)
+	end
+	camera.CFrame = camera.CFrame * walkanimcf
+end)
+
+-- Handle humanoid running to detect walking
+humanoid.Running:Connect(function(s)
+	if s > 0.1 then
+		walking = true
+	else
+		walking = false
+	end
+end)
+]])
+
+NLS([[
+task.wait()
+if game.Players.LocalPlayer.Character then
+	local camera = workspace.CurrentCamera
+
+	local player = game.Players.LocalPlayer
+	local character = player.Character
+
+	local hrp = character:WaitForChild("HumanoidRootPart")
+	local humanoid = character:WaitForChild("Humanoid")
+
+	local UIS = game:GetService("UserInputService")
+	local runService = game:GetService("RunService")
+
+	local part = Instance.new("Part")
+	part.Anchored = true
+	part.CanCollide = false
+	part.Transparency = 1
+	part.Name = "cameraPart"
+	part.Parent = workspace
+
+	camera.CameraSubject = part
+
+	local lastPosition = character.Head.Position
+	local lastUpdateTime = tick()
+
+	runService.Heartbeat:Connect(function()
+		if character.Head and humanoid then
+			local currentPosition = character.Head.Position
+			local currentTime = tick()
+			local deltaTime = currentTime - lastUpdateTime
+
+			-- Calcular la velocidad del personaje
+			local characterVelocity = (currentPosition - lastPosition) / deltaTime
+
+			-- Ajustar el valor de slerp según la velocidad del personaje
+			local slerpAlpha = math.min(0.1 + characterVelocity.Magnitude / 50, 0.5) -- Ajusta los valores según sea necesario
+
+			-- Interpolación esférica para suavizar la transición
+			part.CFrame = CFrame.new(part.Position):lerp(CFrame.new(character.Head.Position), slerpAlpha)
+
+			lastPosition = currentPosition
+			lastUpdateTime = currentTime
+		end
+	end)
+
+	runService.RenderStepped:Connect(function()
+		if UIS.MouseBehavior == Enum.MouseBehavior.LockCenter then
+			hrp.CFrame = CFrame.lookAt(hrp.Position, hrp.Position + Vector3.new(camera.CFrame.LookVector.X, 0, camera.CFrame.LookVector.Z))
+		end
+	end)
+end
 ]])
