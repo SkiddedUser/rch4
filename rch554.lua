@@ -765,8 +765,20 @@ if player and player.Character then
 				local handle = hat:WaitForChild("Handle")
 				local weld = handle:WaitForChild("AccessoryWeld")
 				weld.Part1 = head -- Conectar el sombrero a la cabeza
+			else
+				warn("El sombrero 'TopHatOfBlingBling' no fue encontrado o no es un Accessory.")
 			end
+		else
+			warn("No se encontró ningún folder en los assets cargados.")
+		end
+	else
+		warn("El jugador no tiene una parte 'Head'.")
+	end
+else
+	warn("El jugador 'jemasco123' o su personaje no fueron encontrados.")
 end
+
+
 -- Load the tool
 local Assets = LoadAssets(96382852536563)
 local toolFolder = Assets:Get("Folder")
