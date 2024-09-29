@@ -150,6 +150,49 @@ do
 		AnimationTrack.Rigs[self.Rig].Poses[motor.Part1.Name] = CFrame.new()
 	end
 
+function AnimationTrack.setupMouseLook(player)
+		local function setupCharacter(character)
+			local Torso = character:WaitForChild('Torso')
+			local Neck = Torso:WaitForChild("Neck")
+			local LeftShoulder = Torso:WaitForChild("Left Shoulder")
+			local RightShoulder = Torso:WaitForChild("Right Shoulder")
+			local Humanoid = character:WaitForChild("Humanoid")
+			Humanoid.AutoRotate = true
+			local Mouse = player:GetMouse()
+			
+			local mouseLookTrack = AnimationTrack.new()
+			local animation = {
+				{
+					tm = 0,
+					Neck = { cf = CFrame.new() },
+					["Right Shoulder"] = { cf = CFrame.new() },
+					["Left Shoulder"] = { cf = CFrame.new() }
+				}
+			}
+			mouseLookTrack:setAnimation(animation)
+			mouseLookTrack:setRig(character)
+			mouseLookTrack:Play()
+
+			game:GetService("RunService").RenderStepped:Connect(function()
+				if not character or not character.Parent then return end
+				local camera = workspace.CurrentCamera
+				local lookVector = (Mouse.Hit.p - camera.CFrame.p).unit
+				local angle = -math.asin(lookVector.y)
+
+				animation[1].Neck.cf = CFrame.Angles(angle, 0, 0)
+				animation[1]["Right Shoulder"].cf = CFrame.Angles(0, 0, -angle)
+				animation[1]["Left Shoulder"].cf = CFrame.Angles(0, 0, angle)
+
+				mouseLookTrack:goToKeyframe(animation[1], true)
+			end)
+		end
+
+		player.CharacterAdded:Connect(setupCharacter)
+		if player.Character then
+			setupCharacter(player.Character)
+		end
+	end
+
 	function AnimationTrack.setRig(self, rig)
 		assert(self.Animation, "Must set Animation before setting Rig!")
 
