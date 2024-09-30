@@ -662,6 +662,87 @@ function AnimationTrack.setupMouseLook(player)
 	end
 end
 
+local RunService = game:GetService('RunService')
+local Player = game.Players.LocalPlayer
+local Character = Player.Character or Player.CharacterAdded:Wait()
+local Humanoid = Character:WaitForChild('Humanoid')
+local HumanoidRootPart = Character:WaitForChild('HumanoidRootPart')
+local Torso = Character:WaitForChild('Torso')
+
+-- Original C0 Reference
+local RootJointOriginalC0 = HumanoidRootPart.RootJoint.C0
+local NeckOriginalC0 = Torso.Neck.C0
+local RightHipOriginalC0 = Torso['Right Hip'].C0
+local LeftHipOriginalC0 = Torso['Left Hip'].C0
+
+-- Customizable Settings
+local RangeOfMotion = 45
+local RangeOfMotionTorso = 75 - RangeOfMotion
+local RangeOfMotionXZ = RangeOfMotion/140
+local LerpSpeed = 0.005
+
+-- Main Code
+RangeOfMotion = math.rad(RangeOfMotion)
+RangeOfMotionTorso = math.rad(RangeOfMotionTorso)
+
+local function Calculate(dt)
+    local DirectionOfMovement = HumanoidRootPart.CFrame:VectorToObjectSpace(HumanoidRootPart.Velocity)
+    DirectionOfMovement = Vector3.new(DirectionOfMovement.X / Humanoid.WalkSpeed, 0, DirectionOfMovement.Z / Humanoid.WalkSpeed)
+    local XResult = (DirectionOfMovement.X * (RangeOfMotion - (math.abs(DirectionOfMovement.Z) * (RangeOfMotion / 2))))
+    local XResultTorso = (DirectionOfMovement.X * (RangeOfMotionTorso - (math.abs(DirectionOfMovement.Z) * (RangeOfMotionTorso / 2))))
+    local XResultXZ = (DirectionOfMovement.X * (RangeOfMotionXZ - (math.abs(DirectionOfMovement.Z) * (RangeOfMotionXZ / 2))))
+    
+    if DirectionOfMovement.Z > 0.1 then
+        XResult = XResult * -1
+        XResultTorso = XResultTorso * -1
+        XResultXZ = XResultXZ * -1
+    end
+    
+    local RightHipResult = RightHipOriginalC0 * CFrame.new(-XResultXZ, 0, -math.abs(XResultXZ) + math.abs(-XResultXZ)) * CFrame.Angles(0, -XResult, 0)
+    local LeftHipResult = LeftHipOriginalC0 * CFrame.new(-XResultXZ, 0, -math.abs(-XResultXZ) + math.abs(-XResultXZ)) * CFrame.Angles(0, -XResult, 0)
+    local RootJointResult = RootJointOriginalC0 * CFrame.Angles(0, 0, -XResultTorso)
+    local NeckResult = NeckOriginalC0 * CFrame.Angles(0, 0, XResultTorso)
+    
+    return RightHipResult, LeftHipResult, RootJointResult, NeckResult
+end
+
+-- Create an AnimationTrack for the movement animation
+local movementTrack = AnimationTrack.new()
+movementTrack:setRig(Character)
+
+-- Define the movement animation
+local movementAnimation = {
+    {
+        tm = 0,
+        ["Right Hip"] = { cf = RightHipOriginalC0 },
+        ["Left Hip"] = { cf = LeftHipOriginalC0 },
+        RootJoint = { cf = RootJointOriginalC0 },
+        Neck = { cf = NeckOriginalC0 }
+    }
+}
+movementTrack:setAnimation(movementAnimation)
+
+-- Play the movement animation
+movementTrack:Play()
+
+RunService.RenderStepped:Connect(function(dt)
+    if movementTrack.IsPlaying then
+        local RightHipResult, LeftHipResult, RootJointResult, NeckResult = Calculate(dt)
+        
+        local LerpTime = 1 - LerpSpeed ^ dt
+        
+        -- Update the animation keyframe
+        movementAnimation[1]["Right Hip"].cf = Torso['Right Hip'].C0:Lerp(RightHipResult, LerpTime)
+        movementAnimation[1]["Left Hip"].cf = Torso['Left Hip'].C0:Lerp(LeftHipResult, LerpTime)
+        movementAnimation[1].RootJoint.cf = HumanoidRootPart.RootJoint.C0:Lerp(RootJointResult, LerpTime)
+        movementAnimation[1].Neck.cf = Torso.Neck.C0:Lerp(NeckResult, LerpTime)
+        
+        -- Update the rig using mech's anitracker
+        movementTrack:goToKeyframe(movementAnimation[1], true)
+    end
+end)
+
+
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
 local HttpService = game:GetService("HttpService")
