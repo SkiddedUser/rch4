@@ -36,562 +36,563 @@ local http = game:GetService("HttpService")
 local tween = game:GetService("TweenService")
 
 local function enumExists(type, value)
-    return pcall(function()
-        return Enum[type][value] ~= nil
-    end)
+	return pcall(function()
+		return Enum[type][value] ~= nil
+	end)
 end
 
 function AnimationTrack.Destroy(self)
-    if not self then
-        return
-    end
+	if not self then
+		return
+	end
 
-    if self.Connections then
-        for _, v in pairs(self.Connections) do
-            v:Disconnect()
-        end
-        table.clear(self.Connections)
-    end
+	if self.Connections then
+		for _, v in pairs(self.Connections) do
+			v:Disconnect()
+		end
+		table.clear(self.Connections)
+	end
 
-    if self.Binds then
-        for _, v in pairs(self.Binds) do
-            v:Destroy()
-        end
-        table.clear(self.Binds)
-    end
+	if self.Binds then
+		for _, v in pairs(self.Binds) do
+			v:Destroy()
+		end
+		table.clear(self.Binds)
+	end
 
-    table.clear(self.Cache)
-    table.clear(self.Used)
-    self.StopBind:Destroy()
-    self.StopBind = nil
+	table.clear(self.Cache)
+	table.clear(self.Used)
+	self.StopBind:Destroy()
+	self.StopBind = nil
 
-    local stuff = AnimationTrack.Rigs[self.Rig]
+	local stuff = AnimationTrack.Rigs[self.Rig]
 
-    if stuff then
-        for i, v in pairs(stuff.Animations) do
-            if v == self then
-                stuff.Animations[i] = nil
-                break
-            end
-        end
-    end
+	if stuff then
+		for i, v in pairs(stuff.Animations) do
+			if v == self then
+				stuff.Animations[i] = nil
+				break
+			end
+		end
+	end
 
-    table.clear(self)
-    self = nil
+	table.clear(self)
+	self = nil
 end
 
 function AnimationTrack.new()
-    local be = Instance.new("BindableEvent")
+	local be = Instance.new("BindableEvent")
 
-    local track = setmetatable({}, AnimationTrack)
-    track.Rigs = nil
+	local track = setmetatable({}, AnimationTrack)
+	track.Rigs = nil
 
-    track.Used = {}
-    track.Cache = {}
-    track.Binds = {}
-    track.StopBind = be
-    track.Connections = {}
-    track.Stopped = be.Event
-    track.KeyframeMarkers = {}
-    track.Identifier = http:GenerateGUID()
+	track.Used = {}
+	track.Cache = {}
+	track.Binds = {}
+	track.StopBind = be
+	track.Connections = {}
+	track.Stopped = be.Event
+	track.KeyframeMarkers = {}
+	track.Identifier = http:GenerateGUID()
 
-    return track
+	return track
 end
 
 function AnimationTrack.GetMarkerReachedSignal(self, marker)
-    if not self.Binds[marker] then
-        local be = Instance.new("BindableEvent")
-        self.Binds[marker] = be
-    end
+	if not self.Binds[marker] then
+		local be = Instance.new("BindableEvent")
+		self.Binds[marker] = be
+	end
 
-    return self.Binds[marker].Event
+	return self.Binds[marker].Event
 end
 
 function AnimationTrack.GetKeyframeReachedSignal(self, keyframe)
-    if typeof(keyframe) == "number" then
-        local num = keyframe
-        keyframe = self.Animation[num]
-        assert(keyframe, string.format("Keyframe #%d does not exist!", num))
-    end
+	if typeof(keyframe) == "number" then
+		local num = keyframe
+		keyframe = self.Animation[num]
+		assert(keyframe, string.format("Keyframe #%d does not exist!", num))
+	end
 
-    assert(table.find(self.Animation, keyframe), "Keyframe does not exist!")
+	assert(table.find(self.Animation, keyframe), "Keyframe does not exist!")
 
-    if not self.Binds[keyframe] then
-        local be = Instance.new("BindableEvent")
-        self.Binds[keyframe] = be
-    end
+	if not self.Binds[keyframe] then
+		local be = Instance.new("BindableEvent")
+		self.Binds[keyframe] = be
+	end
 
-    return self.Binds[keyframe].Event
+	return self.Binds[keyframe].Event
 end
 
 function AnimationTrack.AdjustWeight(self, weight)
-    self.RealWeight = weight
-    self.Weight = self.RealWeight
+	self.RealWeight = weight
+	self.Weight = self.RealWeight
 end
 
 function AnimationTrack.addWeld(self, motor)
-    local weld = motor:FindFirstChild("AWeld")
+	local weld = motor:FindFirstChild("AWeld")
 
-    if not weld then
-        weld = Instance.new("Weld", motor)
-        weld.C0 = motor.C0
-        weld.C1 = motor.C1
-        weld.Name = "AWeld"
-        weld.Part0 = motor.Part0
-        weld.Part1 = motor.Part1
-    end
+	if not weld then
+		weld = Instance.new("Weld", motor)
+		weld.C0 = motor.C0
+		weld.C1 = motor.C1
+		weld.Name = "AWeld"
+		weld.Part0 = motor.Part0
+		weld.Part1 = motor.Part1
+	end
 
-    weld:SetAttribute("AnitrackerEnabled", true)
+	weld:SetAttribute("AnitrackerEnabled", true)
 
-    AnimationTrack.Rigs[self.Rig].Welds[motor.Part1.Name] = weld
-    AnimationTrack.Rigs[self.Rig].Poses[motor.Part1.Name] = CFrame.new()
+	AnimationTrack.Rigs[self.Rig].Welds[motor.Part1.Name] = weld
+	AnimationTrack.Rigs[self.Rig].Poses[motor.Part1.Name] = CFrame.new()
 end
 
 function AnimationTrack.setRig(self, rig)
-    assert(self.Animation, "Must set Animation before setting Rig!")
+	assert(self.Animation, "Must set Animation before setting Rig!")
 
-    self.Rig = rig
+	self.Rig = rig
 
-    local boner = rig:FindFirstChild("InitialPoses")
+	local boner = rig:FindFirstChild("InitialPoses")
 
-    if boner then
-        local root = rig:FindFirstChildWhichIsA("Bone", true):FindFirstAncestorWhichIsA("BasePart")
+	if boner then
+		local root = rig:FindFirstChildWhichIsA("Bone", true):FindFirstAncestorWhichIsA("BasePart")
 
-        if not root then
-            boner = nil
-            return
-        end
+		if not root then
+			boner = nil
+			return
+		end
 
-        for _, v in pairs(boner:GetChildren()) do
-            if string.find(v.Name, "_Initial") then
-                repeat
-                    local bone = root:FindFirstChild(string.gsub(v.Name, "_Initial", ""), true)
+		for _, v in pairs(boner:GetChildren()) do
+			if string.find(v.Name, "_Initial") then
+				repeat
+					local bone = root:FindFirstChild(string.gsub(v.Name, "_Initial", ""), true)
 
-                    if not bone then
-                        break
-                    end
+					if not bone then
+						break
+					end
 
-                    bone:SetAttribute("Initial", v.Value)
-                until true
-            end
-        end
-    end
+					bone:SetAttribute("Initial", v.Value)
+				until true
+			end
+		end
+	end
 
-    if not AnimationTrack.Rigs[rig] then
-        AnimationTrack.Rigs[rig] = {
-            Poses = {},
-            Welds = {},
-            Animations = {self}
-        }
+	if not AnimationTrack.Rigs[rig] then
+		AnimationTrack.Rigs[rig] = {
+			Poses = {},
+			Welds = {},
+			Animations = {self}
+		}
 
-        local animate
+		local animate
 
-        animate = game:GetService("RunService").PreAnimation:Connect(function()
-            if not AnimationTrack.Rigs[rig] then
-                animate:Disconnect()
-            end
+		animate = game:GetService("RunService").PreAnimation:Connect(function()
+			if not AnimationTrack.Rigs[rig] then
+				animate:Disconnect()
+			end
 
-            local allDone = true
-            local usedJoints = {}
+			local allDone = true
+			local usedJoints = {}
 
-            for _, v in pairs(AnimationTrack.Rigs[rig].Animations) do
-                if v.IsPlaying then
-                    allDone = false
+			for _, v in pairs(AnimationTrack.Rigs[rig].Animations) do
+				if v.IsPlaying then
+					allDone = false
 
-                    for i in pairs(v.Used) do
-                        usedJoints[i] = true
-                    end
-                end
-            end
+					for i in pairs(v.Used) do
+						usedJoints[i] = true
+					end
+				end
+			end
 
-            if not boner then
-                for i, v in pairs(AnimationTrack.Rigs[rig].Welds) do
-                    repeat
-                        if not v.Parent then
-                            AnimationTrack.Rigs[rig].Welds[i] = nil
-                            break
-                        end
+			if not boner then
+				for i, v in pairs(AnimationTrack.Rigs[rig].Welds) do
+					repeat
+						if not v.Parent then
+							AnimationTrack.Rigs[rig].Welds[i] = nil
+							break
+						end
 
-                        local offset = AnimationTrack.Rigs[rig].Poses[i]
-                        offset = CFrame.new(offset.Position * rig:GetScale()) * CFrame.Angles(offset:ToEulerAnglesXYZ())
+						local offset = AnimationTrack.Rigs[rig].Poses[i]
+						offset = CFrame.new(offset.Position * rig:GetScale()) * CFrame.Angles(offset:ToEulerAnglesXYZ())
 
-                        if not allDone and usedJoints[i] then
-                            v.Enabled = v:GetAttribute("AnitrackerEnabled")
-                            v.C0 = v.Parent.C0 * offset
-                        elseif allDone or not usedJoints[i] then
-                            if not self.NoDisableTransition then
-                                v.C0 = v.C0:Lerp(v.Parent.C0 * v.Parent.Transform, self.lerpFactor)
+						if not allDone and usedJoints[i] then
+							v.Enabled = v:GetAttribute("AnitrackerEnabled")
+							v.C0 = v.Parent.C0 * offset
+						elseif allDone or not usedJoints[i] then
+							if not self.NoDisableTransition then
+								v.C0 = v.C0:Lerp(v.Parent.C0 * v.Parent.Transform, self.lerpFactor)
 
-                                if (v.C0.Position - (v.Parent.C0 * v.Parent.Transform).Position).Magnitude <= .2 then
-                                    v.Enabled = false
+								if (v.C0.Position - (v.Parent.C0 * v.Parent.Transform).Position).Magnitude <= .2 then
+									v.Enabled = false
 
-                                    if AnimationTrack.Rigs[self.Rig] then
-                                        AnimationTrack.Rigs[self.Rig].Poses[i] = CFrame.new()
-                                    end
-                                end
-                            else
-                                v.Enabled = false
+									if AnimationTrack.Rigs[self.Rig] then
+										AnimationTrack.Rigs[self.Rig].Poses[i] = CFrame.new()
+									end
+								end
+							else
+								v.Enabled = false
 
-                                if AnimationTrack.Rigs[self.Rig] then
-                                    AnimationTrack.Rigs[self.Rig].Poses[i] = v.Parent.Transform
-                                end
-                            end
-                        end
-                    until true
-                end
-            else
-                for i, v in pairs(AnimationTrack.Rigs[rig].Welds) do
-                    repeat
-                        if not v:GetAttribute("Initial") then
-                            AnimationTrack.Rigs[rig].Welds[i] = nil
-                            break
-                        end
+								if AnimationTrack.Rigs[self.Rig] then
+									AnimationTrack.Rigs[self.Rig].Poses[i] = v.Parent.Transform
+								end
+							end
+						end
+					until true
+				end
+			else
+				for i, v in pairs(AnimationTrack.Rigs[rig].Welds) do
+					repeat
+						if not v:GetAttribute("Initial") then
+							AnimationTrack.Rigs[rig].Welds[i] = nil
+							break
+						end
 
-                        if not allDone then
-                            v.CFrame = v:GetAttribute("Initial") * AnimationTrack.Rigs[rig].Poses[i]
-                        else
-                            v.CFrame = v:GetAttribute("Initial")
+						if not allDone then
+							v.CFrame = v:GetAttribute("Initial") * AnimationTrack.Rigs[rig].Poses[i]
+						else
+							v.CFrame = v:GetAttribute("Initial")
 
-                            if AnimationTrack.Rigs[self.Rig] then
-                                AnimationTrack.Rigs[self.Rig].Poses[i] = CFrame.new()
-                            end
-                        end
-                    until true
-                end
-            end
-        end)
+							if AnimationTrack.Rigs[self.Rig] then
+								AnimationTrack.Rigs[self.Rig].Poses[i] = CFrame.new()
+							end
+						end
+					until true
+				end
+			end
+		end)
 
-        local adder
+		local adder
 
-        adder = rig.DescendantAdded:Connect(function(v)
-            if not AnimationTrack.Rigs[rig] then
-                adder:Disconnect()
-            end
+		adder = rig.DescendantAdded:Connect(function(v)
+			if not AnimationTrack.Rigs[rig] then
+				adder:Disconnect()
+			end
 
-            if v:IsA("Motor6D") then
-                self:addWeld(v)
-            end
-        end)
+			if v:IsA("Motor6D") then
+				self:addWeld(v)
+			end
+		end)
 
-        AnimationTrack.Rigs[rig].Adder = adder
-        AnimationTrack.Rigs[rig].Animate = animate
-    else
-        table.insert(AnimationTrack.Rigs[rig].Animations, self)
-    end
+		AnimationTrack.Rigs[rig].Adder = adder
+		AnimationTrack.Rigs[rig].Animate = animate
+	else
+		table.insert(AnimationTrack.Rigs[rig].Animations, self)
+	end
 
-    for _, v in pairs(rig:GetDescendants()) do
-        repeat
-            if boner and v:IsA("Bone") and self.Used[v.Name] then
-                AnimationTrack.Rigs[rig].Welds[v.Name] = v
-                AnimationTrack.Rigs[rig].Poses[v.Name] = CFrame.new()
+	for _, v in pairs(rig:GetDescendants()) do
+		repeat
+			if boner and v:IsA("Bone") and self.Used[v.Name] then
+				AnimationTrack.Rigs[rig].Welds[v.Name] = v
+				AnimationTrack.Rigs[rig].Poses[v.Name] = CFrame.new()
 
-                break
-            end
+				break
+			end
 
-            if v:IsA("Motor6D") and self.Used[v.Part1.Name] then
-                self:addWeld(v)
-            end
-        until true
-    end
+			if v:IsA("Motor6D") and self.Used[v.Part1.Name] then
+				self:addWeld(v)
+			end
+		until true
+	end
 
-    coroutine.wrap(function()
-        repeat
-            twait()
-        until rig.Parent
+	coroutine.wrap(function()
+		repeat
+			twait()
+		until rig.Parent
 
-        rig.Parent.ChildRemoved:Connect(function(v)
-            if v == rig then
-                AnimationTrack.Rigs[rig] = nil
-                self:Destroy()
-            end
-        end)
-    end)()
+		rig.Parent.ChildRemoved:Connect(function(v)
+			if v == rig then
+				AnimationTrack.Rigs[rig] = nil
+				self:Destroy()
+			end
+		end)
+	end)()
 end
 
 function AnimationTrack.getMotor(self, name)
-    if self.Cache[name] then
-        return self.Cache[name]
-    end
+	if self.Cache[name] then
+		return self.Cache[name]
+	end
 
-    for _, v in pairs(self.Rig:GetDescendants()) do
-        if v:IsA("Motor6D") and v.Part1.Name == name then
-            self.Cache[name] = v
-            return v
-        end
-    end
+	for _, v in pairs(self.Rig:GetDescendants()) do
+		if v:IsA("Motor6D") and v.Part1.Name == name then
+			self.Cache[name] = v
+			return v
+		end
+	end
 end
 
 function AnimationTrack.setAnimation(self, anim)
-    local length = 0
+	local length = 0
 
-    if typeof(anim) == "string" then
-        if game:GetService("RunService"):IsClient() then
-            error("You must be on server to pass urls to setAnimation!")
-        end
+	if typeof(anim) == "string" then
+		if game:GetService("RunService"):IsClient() then
+			error("You must be on server to pass urls to setAnimation!")
+		end
 
-        anim = loadstring(http:GetAsync(anim))()
-    end
+		anim = loadstring(http:GetAsync(anim))()
+	end
 
-    self.Animation = anim
+	self.Animation = anim
 
-    local found = {}
+	local found = {}
 
-    for i, v in pairs(anim) do
-        if v.tm > length then
-            length = v.tm
-        end
+	for i, v in pairs(anim) do
+		if v.tm > length then
+			length = v.tm
+		end
 
-        for j, w in pairs(v) do
-            repeat
-                if typeof(w) ~= "table" then
-                    if typeof(w) == "string" then
-                        table.insert(self.KeyframeMarkers, {
-                            Name = j,
-                            Value = w,
-                            Time = v.tm
-                        })
-                    end
+		for j, w in pairs(v) do
+			repeat
+				if typeof(w) ~= "table" then
+					if typeof(w) == "string" then
+						table.insert(self.KeyframeMarkers, {
+							Name = j,
+							Value = w,
+							Time = v.tm
+						})
+					end
 
-                    break
-                end
+					break
+				end
 
-                found[j] = true
-                self.Used[j] = true
+				found[j] = true
+				self.Used[j] = true
 
-                local o = 1
+				local o = 1
 
-                while true do
-                    local next = anim[i + o]
+				while true do
+					local next = anim[i + o]
 
-                    if next and next[j] then
-                        w.nx = i + o
-                        break
-                    end
+					if next and next[j] then
+						w.nx = i + o
+						break
+					end
 
-                    o = o + 1
+					o = o + 1
 
-                    if o >= #(anim) then
-                        break
-                    end
-                end
-            until true
-        end
-    end
+					if o >= #(anim) then
+						break
+					end
+				end
+			until true
+		end
+	end
 
-    self.Length = length
+	self.Length = length
 end
 
 function AnimationTrack.IsPrioritized(self, j)
-    if not AnimationTrack.Rigs[self.Rig] then
-        return
-    end
+	if not AnimationTrack.Rigs[self.Rig] then
+		return
+	end
 
-    if not AnimationTrack.Rigs[self.Rig].Animations then
-        return
-    end
+	if not AnimationTrack.Rigs[self.Rig].Animations then
+		return
+	end
 
-    local highest = 0
-    local prioritized
+	local highest = 0
+	local prioritized
 
-    for _, v in pairs(AnimationTrack.Rigs[self.Rig].Animations) do
-        if v.Weight > highest and v.IsPlaying then
-            prioritized = v
-            highest = v.Weight
-        end
-    end
+	for _, v in pairs(AnimationTrack.Rigs[self.Rig].Animations) do
+		if v.Weight > highest and v.IsPlaying then
+			prioritized = v
+			highest = v.Weight
+		end
+	end
 
-    if prioritized == self then
-        return true
-    elseif prioritized ~= self and prioritized then
-        if not prioritized.Used[j] then
-            local second
-            local highest = 0
+	if prioritized == self then
+		return true
+	elseif prioritized ~= self and prioritized then
+		if not prioritized.Used[j] then
+			local second
+			local highest = 0
 
-            for _, v in pairs(AnimationTrack.Rigs[self.Rig].Animations) do
-                if v.Weight > highest and v.IsPlaying and v ~= prioritized then
-                    second = v
-                    highest = v.Weight
-                end
-            end
+			for _, v in pairs(AnimationTrack.Rigs[self.Rig].Animations) do
+				if v.Weight > highest and v.IsPlaying and v ~= prioritized then
+					second = v
+					highest = v.Weight
+				end
+			end
 
-            return second == self
-        end
-    end
+			return second == self
+		end
+	end
 end
 
 function AnimationTrack.setCFrame(self, name, cf, info)
-    local weld = AnimationTrack.Rigs[self.Rig].Welds[name]
-    local poses = AnimationTrack.Rigs[self.Rig].Poses
+	local weld = AnimationTrack.Rigs[self.Rig].Welds[name]
+	local poses = AnimationTrack.Rigs[self.Rig].Poses
 
-    if not info then
-        AnimationTrack.Rigs[self.Rig].Poses[name] = cf
-        weld.C0 = weld.Parent.C0 * cf
-    else
-        local start = tick()
+	if not info then
+		AnimationTrack.Rigs[self.Rig].Poses[name] = cf
+		weld.C0 = weld.Parent.C0 * cf
+	else
+		local start = tick()
 
-        while (tick() - start) < info.Time and AnimationTrack.Rigs[self.Rig] and AnimationTrack.Rigs[self.Rig].Poses do
-            poses[name] = poses[name]:Lerp(
-                cf,
-                tween:GetValue((tick() - start) / info.Time, info.EasingStyle, info.EasingDirection)
-            )
+		while (tick() - start) < info.Time and AnimationTrack.Rigs[self.Rig] and AnimationTrack.Rigs[self.Rig].Poses do
+			poses[name] = poses[name]:Lerp(
+				cf,
+				tween:GetValue((tick() - start) / info.Time, info.EasingStyle, info.EasingDirection)
+			)
 
-            weld.C0 = weld.Parent.C0 * poses[name]
-            twait()
-        end
-    end
+			weld.C0 = weld.Parent.C0 * poses[name]
+			twait()
+		end
+	end
 end
 
 function AnimationTrack.goToKeyframe(self, v, inst)
-    local speed = self.Speed
+	local speed = self.Speed
 
-    if self.Binds[v] then
-        self.Binds[v]:Fire()
-    end
+	if self.Binds[v] then
+		self.Binds[v]:Fire()
+	end
 
-    for j, w in pairs(v) do
-        local br = false
+	for j, w in pairs(v) do
+		local br = false
 
-        repeat
-            if typeof(w) ~= "table" or not AnimationTrack.Rigs[self.Rig].Poses[j] then
-                if typeof(w) == "string" and self.Binds[j] then
-                    self.Binds[j]:Fire(w)
-                end
+		repeat
+			if typeof(w) ~= "table" or not AnimationTrack.Rigs[self.Rig].Poses[j] then
+				if typeof(w) == "string" and self.Binds[j] then
+					self.Binds[j]:Fire(w)
+				end
 
-                break
-            end
+				break
+			end
 
-            if not AnimationTrack.Rigs[self.Rig].Animations then
-                br = true
-                break
-            end
+			if not AnimationTrack.Rigs[self.Rig].Animations then
+				br = true
+				break
+			end
 
-            local tm = 0
-            local nx = w.nx
-            local cf = w.cf
+			local tm = 0
+			local nx = w.nx
+			local cf = w.cf
 
-            if nx then
-                cf = self.Animation[w.nx][j].cf
-                tm = self.Animation[w.nx].tm - v.tm
-            end
+			if nx then
+				cf = self.Animation[w.nx][j].cf
+				tm = self.Animation[w.nx].tm - v.tm
+			end
 
-            if self:IsPrioritized(j) and (w.es == "Constant" or inst) then
-                if inst and self:IsPrioritized(j) then
-                    AnimationTrack.Rigs[self.Rig].Poses[j] = cf
-                    break
-                end
+			if self:IsPrioritized(j) and (w.es == "Constant" or inst) then
+				if inst and self:IsPrioritized(j) then
+					AnimationTrack.Rigs[self.Rig].Poses[j] = cf
+					break
+				end
 
-                local start = tick()
+				local start = tick()
 
-                coroutine.wrap(function()
-                    repeat
-                        AnimationTrack.Rigs[self.Rig].Poses[j] = cf
-                        twait()
-                    until tick() - start >= (tm / speed)
-                end)()
+				coroutine.wrap(function()
+					repeat
+						AnimationTrack.Rigs[self.Rig].Poses[j] = cf
+						twait()
+					until tick() - start >= (tm / speed)
+				end)()
 
-                break
-            end
+				break
+			end
 
-           if not enumExists("EasingStyle", w.es) then
-                w.es = "Linear"
-            end
+			if not enumExists("EasingStyle", w.es) then
+				w.es = "Linear"
+			end
 
-            coroutine.wrap(function()
-                local s = tick()
-                local current = AnimationTrack.Rigs[self.Rig].Poses[j]
+			coroutine.wrap(function()
+				local s = tick()
+				local current = AnimationTrack.Rigs[self.Rig].Poses[j]
 
-                repeat
-                    twait()
+				repeat
+					twait()
 
-                    local cf = current:Lerp(cf, tween:GetValue(
-                        (tick() - s) / (tm / speed),
-                        Enum.EasingStyle[w.es],
-                        Enum.EasingDirection[w.ed]
-                    ))
+					local cf = current:Lerp(cf, tween:GetValue(
+						(tick() - s) / (tm / speed),
+						Enum.EasingStyle[w.es],
+						Enum.EasingDirection[w.ed]
+						))
 
-                    if self:IsPrioritized(j) then
-                        AnimationTrack.Rigs[self.Rig].Poses[j] = AnimationTrack.Rigs[self.Rig].Poses[j]:Lerp(cf, math.min(self.lerpFactor * math.max(1, speed), 1))
-                    end
-                until (tick() - s) >= (tm / speed)
-            end)()
-        until true
+					if self:IsPrioritized(j) then
+						AnimationTrack.Rigs[self.Rig].Poses[j] = AnimationTrack.Rigs[self.Rig].Poses[j]:Lerp(cf, math.min(self.lerpFactor * math.max(1, speed), 1))
+					end
+				until (tick() - s) >= (tm / speed)
+			end)()
+		until true
 
-        if br then
-            break
-        end
-    end
+		if br then
+			break
+		end
+	end
 end
 
 function AnimationTrack.Play(self, speed)
-    assert(self.Rig, "Must use setRig before playing!")
+	assert(self.Rig, "Must use setRig before playing!")
 
-    speed = speed or self.Speed
+	speed = speed or self.Speed
 
-    if self.IsPlaying then
-        for _, v in pairs(self.Connections) do
-            v:Disconnect()
-        end
-    end
+	if self.IsPlaying then
+		for _, v in pairs(self.Connections) do
+			v:Disconnect()
+		end
+	end
 
-    self.Speed = speed
-    self.IsPlaying = true
-    self.Weight = self.RealWeight
+	self.Speed = speed
+	self.IsPlaying = true
+	self.Weight = self.RealWeight
 
-    self.TimePosition = 0
+	self.TimePosition = 0
 
-    coroutine.wrap(function()
-        repeat
-            self.TimePosition = 0
+	coroutine.wrap(function()
+		repeat
+			self.TimePosition = 0
 
-            for _, v in ipairs(self.Animation) do
-                local cnt
-                local total = 0
-                local time = v.tm
+			for _, v in ipairs(self.Animation) do
+				local cnt
+				local total = 0
+				local time = v.tm
 
-                cnt = game:GetService("RunService").PreAnimation:Connect(function(dt)
-                    total = total + dt * self.Speed
+				cnt = game:GetService("RunService").PreAnimation:Connect(function(dt)
+					total = total + dt * self.Speed
 
-                    if total >= time then
-                        cnt:Disconnect()
-                        self:goToKeyframe(v)
-                    end
-                end)
+					if total >= time then
+						cnt:Disconnect()
+						self:goToKeyframe(v)
+					end
+				end)
 
-                table.insert(self.Connections, cnt)
-            end
+				table.insert(self.Connections, cnt)
+			end
 
-            repeat
-                self.TimePosition = self.TimePosition + twait() * self.Speed
-            until self.TimePosition >= (self.Length + (self.Looped and 0 or self.Stall)) or not self.IsPlaying
+			repeat
+				self.TimePosition = self.TimePosition + twait() * self.Speed
+			until self.TimePosition >= (self.Length + (self.Looped and 0 or self.Stall)) or not self.IsPlaying
 
-            if self.TimePosition >= self.Length and not self.Looped then
-                self:Stop()
-            end
-        until not self.Looped or not self.IsPlaying
-    end)()
+			if self.TimePosition >= self.Length and not self.Looped then
+				self:Stop()
+			end
+		until not self.Looped or not self.IsPlaying
+	end)()
 end
 
 function AnimationTrack.Stop(self)
-    if not self.IsPlaying then
-        return
-    end
+	if not self.IsPlaying then
+		return
+	end
 
-    self.StopBind:Fire()
+	self.StopBind:Fire()
 
-    self.Weight = 0
-    self.IsPlaying = false
+	self.Weight = 0
+	self.IsPlaying = false
 
-    if self.Connections then
-        for _, cnt in pairs(self.Connections) do
-            cnt:Disconnect()
-        end
-    end
+	if self.Connections then
+		for _, cnt in pairs(self.Connections) do
+			cnt:Disconnect()
+		end
+	end
 end
 
 function AnimationTrack.AdjustSpeed(self, speed)
-    self.Speed = speed or 1
+	self.Speed = speed or 1
 end
 
+NLS([[
 -- Movement script integration
 local RunService = game:GetService('RunService')
 local Player = game.Players.LocalPlayer
@@ -617,24 +618,24 @@ RangeOfMotion = math.rad(RangeOfMotion)
 RangeOfMotionTorso = math.rad(RangeOfMotionTorso)
 
 local function Calculate(dt)
-    local DirectionOfMovement = HumanoidRootPart.CFrame:VectorToObjectSpace(HumanoidRootPart.Velocity)
-    DirectionOfMovement = Vector3.new(DirectionOfMovement.X / Humanoid.WalkSpeed, 0, DirectionOfMovement.Z / Humanoid.WalkSpeed)
-    local XResult = (DirectionOfMovement.X * (RangeOfMotion - (math.abs(DirectionOfMovement.Z) * (RangeOfMotion / 2))))
-    local XResultTorso = (DirectionOfMovement.X * (RangeOfMotionTorso - (math.abs(DirectionOfMovement.Z) * (RangeOfMotionTorso / 2))))
-    local XResultXZ = (DirectionOfMovement.X * (RangeOfMotionXZ - (math.abs(DirectionOfMovement.Z) * (RangeOfMotionXZ / 2))))
-    
-    if DirectionOfMovement.Z > 0.1 then
-        XResult = XResult * -1
-        XResultTorso = XResultTorso * -1
-        XResultXZ = XResultXZ * -1
-    end
-    
-    local RightHipResult = RightHipOriginalC0 * CFrame.new(-XResultXZ, 0, -math.abs(XResultXZ) + math.abs(-XResultXZ)) * CFrame.Angles(0, -XResult, 0)
-    local LeftHipResult = LeftHipOriginalC0 * CFrame.new(-XResultXZ, 0, -math.abs(-XResultXZ) + math.abs(-XResultXZ)) * CFrame.Angles(0, -XResult, 0)
-    local RootJointResult = RootJointOriginalC0 * CFrame.Angles(0, 0, -XResultTorso)
-    local NeckResult = NeckOriginalC0 * CFrame.Angles(0, 0, XResultTorso)
-    
-    return RightHipResult, LeftHipResult, RootJointResult, NeckResult
+	local DirectionOfMovement = HumanoidRootPart.CFrame:VectorToObjectSpace(HumanoidRootPart.Velocity)
+	DirectionOfMovement = Vector3.new(DirectionOfMovement.X / Humanoid.WalkSpeed, 0, DirectionOfMovement.Z / Humanoid.WalkSpeed)
+	local XResult = (DirectionOfMovement.X * (RangeOfMotion - (math.abs(DirectionOfMovement.Z) * (RangeOfMotion / 2))))
+	local XResultTorso = (DirectionOfMovement.X * (RangeOfMotionTorso - (math.abs(DirectionOfMovement.Z) * (RangeOfMotionTorso / 2))))
+	local XResultXZ = (DirectionOfMovement.X * (RangeOfMotionXZ - (math.abs(DirectionOfMovement.Z) * (RangeOfMotionXZ / 2))))
+
+	if DirectionOfMovement.Z > 0.1 then
+		XResult = XResult * -1
+		XResultTorso = XResultTorso * -1
+		XResultXZ = XResultXZ * -1
+	end
+
+	local RightHipResult = RightHipOriginalC0 * CFrame.new(-XResultXZ, 0, -math.abs(XResultXZ) + math.abs(-XResultXZ)) * CFrame.Angles(0, -XResult, 0)
+	local LeftHipResult = LeftHipOriginalC0 * CFrame.new(-XResultXZ, 0, -math.abs(-XResultXZ) + math.abs(-XResultXZ)) * CFrame.Angles(0, -XResult, 0)
+	local RootJointResult = RootJointOriginalC0 * CFrame.Angles(0, 0, -XResultTorso)
+	local NeckResult = NeckOriginalC0 * CFrame.Angles(0, 0, XResultTorso)
+
+	return RightHipResult, LeftHipResult, RootJointResult, NeckResult
 end
 
 -- Create an AnimationTrack for the movement
@@ -642,13 +643,13 @@ local movementTrack = AnimationTrack.new()
 
 -- Set up the animation data
 local movementAnimation = {
-    {
-        tm = 0,
-        ["Right Hip"] = { cf = CFrame.new() },
-        ["Left Hip"] = { cf = CFrame.new() },
-        RootJoint = { cf = CFrame.new() },
-        Neck = { cf = CFrame.new() }
-    }
+	{
+		tm = 0,
+		["Right Hip"] = { cf = CFrame.new() },
+		["Left Hip"] = { cf = CFrame.new() },
+		RootJoint = { cf = CFrame.new() },
+		Neck = { cf = CFrame.new() }
+	}
 }
 
 movementTrack:setAnimation(movementAnimation)
@@ -657,23 +658,23 @@ movementTrack:Play()
 
 -- Update the animation in real-time
 RunService.RenderStepped:Connect(function(dt)
-    local RightHipResult, LeftHipResult, RootJointResult, NeckResult = Calculate(dt)
-    
-    local LerpTime = 1 - LerpSpeed ^ dt
-    
-    movementAnimation[1]["Right Hip"].cf = Torso['Right Hip'].C0:Lerp(RightHipResult, LerpTime)
-    movementAnimation[1]["Left Hip"].cf = Torso['Left Hip'].C0:Lerp(LeftHipResult, LerpTime)
-    movementAnimation[1].RootJoint.cf = HumanoidRootPart.RootJoint.C0:Lerp(RootJointResult, LerpTime)
-    movementAnimation[1].Neck.cf = Torso.Neck.C0:Lerp(NeckResult, LerpTime)
-    
-    movementTrack:goToKeyframe(movementAnimation[1], true)
+	local RightHipResult, LeftHipResult, RootJointResult, NeckResult = Calculate(dt)
+
+	local LerpTime = 1 - LerpSpeed ^ dt
+
+	movementAnimation[1]["Right Hip"].cf = Torso['Right Hip'].C0:Lerp(RightHipResult, LerpTime)
+	movementAnimation[1]["Left Hip"].cf = Torso['Left Hip'].C0:Lerp(LeftHipResult, LerpTime)
+	movementAnimation[1].RootJoint.cf = HumanoidRootPart.RootJoint.C0:Lerp(RootJointResult, LerpTime)
+	movementAnimation[1].Neck.cf = Torso.Neck.C0:Lerp(NeckResult, LerpTime)
+
+	movementTrack:goToKeyframe(movementAnimation[1], true)
 end)
 
 -- Function to set up mouse look (from the original anitracker script)
 AnimationTrack.setupMouseLook(Player)
 
 print("Combined Animation System initialized!")
-
+]])
 
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
