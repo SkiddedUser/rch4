@@ -31,6 +31,35 @@ AnimationTrack.IsPlaying = false
 AnimationTrack.__index = AnimationTrack
 AnimationTrack.NoDisableTransition = false
 
+-- ADDITIONAL UTILITY FUNCTION FOR DIRECT CFRAME MANIPULATION
+function AnimationTrack.DirectSetCFrame(self, partName, newCFrame, blendFactor)
+	if not self.Rig then
+		warn("Rig not set for this AnimationTrack!")
+		return
+	end
+
+	local motor = self:getMotor(partName)
+	if not motor then
+		warn("No motor found for part: " .. tostring(partName))
+		return
+	end
+
+	local weld = AnimationTrack.Rigs[self.Rig].Welds[partName]
+	if not weld then
+		warn("No weld found for part: " .. tostring(partName))
+		return
+	end
+
+	blendFactor = blendFactor or 1  -- Default to full blend if not specified
+
+	-- Override the existing pose with the new CFrame
+	local currentPose = AnimationTrack.Rigs[self.Rig].Poses[partName] or CFrame.new()
+	local blendedCFrame = currentPose:Lerp(newCFrame, blendFactor)
+
+	AnimationTrack.Rigs[self.Rig].Poses[partName] = blendedCFrame
+	weld.C0 = weld.Parent.C0 * blendedCFrame
+end
+
 local twait = task.wait
 local http = game:GetService("HttpService")
 local tween = game:GetService("TweenService")
