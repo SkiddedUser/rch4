@@ -1,5 +1,4 @@
 --[[
-  CREDITS TO MECHXYZ
 	mech's anitracker
 	i know i suck at names
 
@@ -9,6 +8,18 @@
 	3. anim:setRig(rig)
 	4. anim:Play()
 
+	- example code
+	local AnimationTrack = require(path.to.module) -- // or alternatively, (for the noobs), loadstring(game:GetService("HttpService"):GetAsync("https://github.com/MechaXYZ/modules/raw/main/Anitracker.lua"))()
+	local anims = require(path.to.anim)
+
+	-- // can pass an url too
+	-- // local anims = "https://rentry.co/anitracker_example/raw"
+
+	local anim = AnimationTrack.new()
+	anim:setAnimation(anims)
+	anim:setRig(owner.Character)
+	anim:Play()
+
 	- AdjustWeight doesn't actually adjust weight, it adjusts priority (i thought weights and priority were the same thing a while back)
 	- set anim.lerpFactor to change how much it lerps into the next pose
 	- AnimationTrack.NoDisableTransition is global and sets whether the welds lerp into their parent's Transform after all animations on a rig are done playing before being disabled, setting it to false disables the welds as soon as the last animation stops
@@ -16,581 +27,868 @@
 	- can also be used on client
 ]]
 
--- mech's anitracker
-local AnimationTrack = {}
-AnimationTrack.Rigs = {}
-AnimationTrack.Speed = 1
-AnimationTrack.Stall = 0
-AnimationTrack.Length = 0
-AnimationTrack.Weight = 1
-AnimationTrack.Looped = false
-AnimationTrack.RealWeight = 1
-AnimationTrack.lerpFactor = .6
-AnimationTrack.TimePosition = 0
-AnimationTrack.IsPlaying = false
-AnimationTrack.__index = AnimationTrack
-AnimationTrack.NoDisableTransition = false
+-- // Signal by sleitnick (edited for lua 5.1)
 
-local twait = task.wait
-local http = game:GetService("HttpService")
-local tween = game:GetService("TweenService")
+local SignalClass
 
-local function enumExists(type, value)
-	return pcall(function()
-		return Enum[type][value] ~= nil
-	end)
-end
+do
+	local freeRunnerThread = nil
 
-function AnimationTrack.Destroy(self)
-	if not self then
-		return
+	local function acquireRunnerThreadAndCallEventHandler(fn, ...)
+		local acquiredRunnerThread = freeRunnerThread
+		freeRunnerThread = nil
+		fn(...)
+
+		freeRunnerThread = acquiredRunnerThread
 	end
 
-	if self.Connections then
-		for _, v in pairs(self.Connections) do
-			v:Disconnect()
-		end
-		table.clear(self.Connections)
-	end
+	local function runEventHandlerInFreeThread(...)
+		acquireRunnerThreadAndCallEventHandler(...)
 
-	if self.Binds then
-		for _, v in pairs(self.Binds) do
-			v:Destroy()
-		end
-		table.clear(self.Binds)
-	end
-
-	table.clear(self.Cache)
-	table.clear(self.Used)
-	self.StopBind:Destroy()
-	self.StopBind = nil
-
-	local stuff = AnimationTrack.Rigs[self.Rig]
-
-	if stuff then
-		for i, v in pairs(stuff.Animations) do
-			if v == self then
-				stuff.Animations[i] = nil
-				break
-			end
+		while true do
+			acquireRunnerThreadAndCallEventHandler(coroutine.yield())
 		end
 	end
 
-	table.clear(self)
-	self = nil
-end
+	local Connection = {}
+	Connection.__index = Connection
 
-function AnimationTrack.new()
-	local be = Instance.new("BindableEvent")
-
-	local track = setmetatable({}, AnimationTrack)
-	track.Rigs = nil
-
-	track.Used = {}
-	track.Cache = {}
-	track.Binds = {}
-	track.StopBind = be
-	track.Connections = {}
-	track.Stopped = be.Event
-	track.KeyframeMarkers = {}
-	track.Identifier = http:GenerateGUID()
-
-	return track
-end
-
-function AnimationTrack.GetMarkerReachedSignal(self, marker)
-	if not self.Binds[marker] then
-		local be = Instance.new("BindableEvent")
-		self.Binds[marker] = be
-	end
-
-	return self.Binds[marker].Event
-end
-
-function AnimationTrack.GetKeyframeReachedSignal(self, keyframe)
-	if typeof(keyframe) == "number" then
-		local num = keyframe
-		keyframe = self.Animation[num]
-		assert(keyframe, string.format("Keyframe #%d does not exist!", num))
-	end
-
-	assert(table.find(self.Animation, keyframe), "Keyframe does not exist!")
-
-	if not self.Binds[keyframe] then
-		local be = Instance.new("BindableEvent")
-		self.Binds[keyframe] = be
-	end
-
-	return self.Binds[keyframe].Event
-end
-
-function AnimationTrack.AdjustWeight(self, weight)
-	self.RealWeight = weight
-	self.Weight = self.RealWeight
-end
-
-function AnimationTrack.addWeld(self, motor)
-	local weld = motor:FindFirstChild("AWeld")
-
-	if not weld then
-		weld = Instance.new("Weld", motor)
-		weld.C0 = motor.C0
-		weld.C1 = motor.C1
-		weld.Name = "AWeld"
-		weld.Part0 = motor.Part0
-		weld.Part1 = motor.Part1
-	end
-
-	weld:SetAttribute("AnitrackerEnabled", true)
-
-	AnimationTrack.Rigs[self.Rig].Welds[motor.Part1.Name] = weld
-	AnimationTrack.Rigs[self.Rig].Poses[motor.Part1.Name] = CFrame.new()
-end
-
-function AnimationTrack.setRig(self, rig)
-	assert(self.Animation, "Must set Animation before setting Rig!")
-
-	self.Rig = rig
-
-	local boner = rig:FindFirstChild("InitialPoses")
-
-	if boner then
-		local root = rig:FindFirstChildWhichIsA("Bone", true):FindFirstAncestorWhichIsA("BasePart")
-
-		if not root then
-			boner = nil
+	function Connection:Disconnect()
+		if not self.Connected then
 			return
 		end
 
-		for _, v in pairs(boner:GetChildren()) do
-			if string.find(v.Name, "_Initial") then
-				repeat
-					local bone = root:FindFirstChild(string.gsub(v.Name, "_Initial", ""), true)
+		self.Connected = false
 
-					if not bone then
-						break
-					end
+		if self._signal._handlerListHead == self then
+			self._signal._handlerListHead = self._next
+		else
+			local prev = self._signal._handlerListHead
 
-					bone:SetAttribute("Initial", v.Value)
-				until true
+			while prev and prev._next ~= self do
+				prev = prev._next
+			end
+
+			if prev then
+				prev._next = self._next
 			end
 		end
 	end
 
-	if not AnimationTrack.Rigs[rig] then
-		AnimationTrack.Rigs[rig] = {
-			Poses = {},
-			Welds = {},
-			Animations = {self}
-		}
+	Connection.Destroy = Connection.Disconnect
 
-		local animate
+	setmetatable(Connection, {
+		__index = function(_tb, key)
+			error(("Attempt to get Connection::%s (not a valid member)"):format(tostring(key)), 2)
+		end,
+		__newindex = function(_tb, key, _value)
+			error(("Attempt to set Connection::%s (not a valid member)"):format(tostring(key)), 2)
+		end,
+	})
 
-		animate = game:GetService("RunService").PreAnimation:Connect(function()
-			if not AnimationTrack.Rigs[rig] then
-				animate:Disconnect()
+	local Signal = {}
+	Signal.__index = Signal
+
+	function Signal.new()
+		local self = setmetatable({
+			_handlerListHead = false,
+			_proxyHandler = nil,
+			_yieldedThreads = nil,
+		}, Signal)
+
+		return self
+	end
+
+	function Signal.Wrap(rbxScriptSignal)
+		assert(
+			typeof(rbxScriptSignal) == "RBXScriptSignal",
+			"Argument #1 to Signal.Wrap must be a RBXScriptSignal; got " .. typeof(rbxScriptSignal)
+		)
+
+		local signal = Signal.new()
+
+		signal._proxyHandler = rbxScriptSignal:Connect(function(...)
+			signal:Fire(...)
+		end)
+
+		return signal
+	end
+
+	function Signal.Is(obj)
+		return type(obj) == "table" and getmetatable(obj) == Signal
+	end
+
+	function Signal:Connect(fn)
+		local connection = setmetatable({
+			Connected = true,
+			_signal = self,
+			_fn = fn,
+			_next = false,
+		}, Connection)
+
+		if self._handlerListHead then
+			connection._next = self._handlerListHead
+			self._handlerListHead = connection
+		else
+			self._handlerListHead = connection
+		end
+
+		return connection
+	end
+
+	function Signal:ConnectOnce(fn)
+		return self:Once(fn)
+	end
+
+	function Signal:Once(fn)
+		local connection
+		local done = false
+
+		connection = self:Connect(function(...)
+			if done then
+				return
 			end
 
-			local allDone = true
-			local usedJoints = {}
+			done = true
+			connection:Disconnect()
+			fn(...)
+		end)
 
-			for _, v in pairs(AnimationTrack.Rigs[rig].Animations) do
-				if v.IsPlaying then
-					allDone = false
+		return connection
+	end
 
-					for i in pairs(v.Used) do
-						usedJoints[i] = true
-					end
+	function Signal:GetConnections()
+		local items = {}
+
+		local item = self._handlerListHead
+
+		while item do
+			table.insert(items, item)
+			item = item._next
+		end
+
+		return items
+	end
+
+	function Signal:DisconnectAll()
+		local item = self._handlerListHead
+
+		while item do
+			item.Connected = false
+			item = item._next
+		end
+
+		self._handlerListHead = false
+
+		local yieldedThreads = rawget(self, "_yieldedThreads")
+
+		if yieldedThreads then
+			for thread in pairs(yieldedThreads) do
+				if coroutine.status(thread) == "suspended" then
+					warn(debug.traceback(thread, "signal disconnected; yielded thread cancelled", 2))
+					task.cancel(thread)
 				end
 			end
 
-			if not boner then
-				for i, v in pairs(AnimationTrack.Rigs[rig].Welds) do
+			table.clear(self._yieldedThreads)
+		end
+	end
+
+	function Signal:Fire(...)
+		local item = self._handlerListHead
+		while item do
+			if item.Connected then
+				if not freeRunnerThread then
+					freeRunnerThread = coroutine.create(runEventHandlerInFreeThread)
+				end
+				task.spawn(freeRunnerThread, item._fn, ...)
+			end
+			item = item._next
+		end
+	end
+
+	function Signal:FireDeferred(...)
+		local item = self._handlerListHead
+
+		while item do
+			local conn = item
+
+			task.defer(function(...)
+				if conn.Connected then
+					conn._fn(...)
+				end
+			end, ...)
+
+			item = item._next
+		end
+	end
+
+	function Signal:Wait()
+		local yieldedThreads = rawget(self, "_yieldedThreads")
+		if not yieldedThreads then
+			yieldedThreads = {}
+			rawset(self, "_yieldedThreads", yieldedThreads)
+		end
+
+		local thread = coroutine.running()
+		yieldedThreads[thread] = true
+
+		self:Once(function(...)
+			yieldedThreads[thread] = nil
+			task.spawn(thread, ...)
+		end)
+
+		return coroutine.yield()
+	end
+
+	function Signal:Destroy()
+		self:DisconnectAll()
+
+		local proxyHandler = rawget(self, "_proxyHandler")
+		if proxyHandler then
+			proxyHandler:Disconnect()
+		end
+	end
+
+	setmetatable(Signal, {
+		__index = function(_tb, key)
+			error(("Attempt to get Signal::%s (not a valid member)"):format(tostring(key)), 2)
+		end,
+		__newindex = function(_tb, key, _value)
+			error(("Attempt to set Signal::%s (not a valid member)"):format(tostring(key)), 2)
+		end,
+	})
+
+	SignalClass = table.freeze({
+		new = Signal.new,
+		Wrap = Signal.Wrap,
+		Is = Signal.Is,
+	})
+end
+
+local AnimationTrack
+local twait = task.wait
+local Signal = SignalClass
+local http = game:GetService("HttpService")
+local tween = game:GetService("TweenService")
+
+-- // optimizations
+local find = table.find
+local clear = table.clear
+local insert = table.insert
+local min, max = math.min, math.max
+
+do
+	AnimationTrack = {}
+	AnimationTrack.Rigs = {}
+	AnimationTrack.Speed = 1
+	AnimationTrack.Stall = 0
+	AnimationTrack.Length = 0
+	AnimationTrack.Weight = 1
+	AnimationTrack.Looped = false
+	AnimationTrack.RealWeight = 1
+	AnimationTrack.lerpFactor = .6
+	AnimationTrack.TimePosition = 0
+	AnimationTrack.IsPlaying = false
+	AnimationTrack.__index = AnimationTrack
+	AnimationTrack.NoDisableTransition = false
+
+	local function enumExists(type, value)
+		return pcall(function()
+			return Enum[type][value] ~= nil
+		end)
+	end
+
+	function AnimationTrack.Destroy(self)
+		if not self then
+			return
+		end
+
+		if self.Connections then
+			for _, v in pairs(self.Connections) do
+				v:Disconnect()
+			end
+
+			clear(self.Connections)
+		end
+
+		if self.Binds then
+			for _, v in pairs(self.Binds) do
+				v:Destroy()
+			end
+
+			clear(self.Binds)
+		end
+
+		clear(self.Cache)
+		clear(self.Used)
+		self.Stopped:Destroy()
+        self.Stopped = nil
+
+		local stuff = AnimationTrack.Rigs[self.Rig]
+
+		if stuff then
+			for i, v in pairs(stuff.Animations) do
+				if v == self then
+					stuff.Animations[i] = nil
+					break
+				end
+			end
+		end
+
+		clear(self)
+		self = nil
+	end
+
+	function AnimationTrack.new()
+		local track = setmetatable({}, AnimationTrack)
+		track.Rigs = nil
+
+
+		track.Used = {}
+		track.Cache = {}
+		track.Binds = {}
+		track.Connections = {}
+		track.KeyframeMarkers = {}
+		track.Stopped = Signal.new()
+		track.DidLoop = Signal.new()
+		track.Identifier = http:GenerateGUID()
+
+		return track
+	end
+
+	function AnimationTrack.GetMarkerReachedSignal(self, marker)
+		if not self.Binds[marker] then
+			self.Binds[marker] = Signal.new()
+		end
+
+		return self.Binds[marker]
+	end
+
+	function AnimationTrack.GetKeyframeReachedSignal(self, keyframe)
+		if typeof(keyframe) == "number" then
+			local num = keyframe
+			keyframe = self.Animation[num]
+			assert(keyframe, string.format("Keyframe #%d does not exist!", num))
+		end
+
+		assert(find(self.Animation, keyframe), "Keyframe does not exist!")
+
+		if not self.Binds[keyframe] then
+			self.Binds[keyframe] = Signal.new()
+		end
+
+		return self.Binds[keyframe]
+	end
+
+	function AnimationTrack.AdjustWeight(self, weight)
+		self.RealWeight = weight
+		self.Weight = self.RealWeight
+	end
+
+	function AnimationTrack.addWeld(self, motor)
+		local weld = motor:FindFirstChild("AWeld")
+
+		if not weld then
+			weld = Instance.new("Weld")
+			weld.C0 = motor.C0
+			weld.C1 = motor.C1
+			weld.Name = "AWeld"
+			weld.Part0 = motor.Part0
+			weld.Part1 = motor.Part1
+			weld.Parent = motor
+		end
+
+		weld:SetAttribute("AnitrackerEnabled", true)
+
+		AnimationTrack.Rigs[self.Rig].Welds[motor.Part1.Name] = weld
+		AnimationTrack.Rigs[self.Rig].Poses[motor.Part1.Name] = CFrame.new()
+	end
+
+	function AnimationTrack.setRig(self, rig)
+		assert(self.Animation, "Must set Animation before setting Rig!")
+
+		self.Rig = rig
+
+		-- // funny variable name
+		local boner = rig:FindFirstChild("InitialPoses")
+
+		if boner then
+			local root = rig:FindFirstChildWhichIsA("Bone", true):FindFirstAncestorWhichIsA("BasePart")
+
+			if not root then
+				boner = nil
+				return
+			end
+
+			for _, v in pairs(boner:GetChildren()) do
+				if string.find(v.Name, "_Initial") then
 					repeat
-						if not v.Parent then
-							AnimationTrack.Rigs[rig].Welds[i] = nil
+						local bone = root:FindFirstChild(string.gsub(v.Name, "_Initial", ""), true)
+
+						if not bone then
 							break
 						end
 
-						local offset = AnimationTrack.Rigs[rig].Poses[i]
-						offset = CFrame.new(offset.Position * rig:GetScale()) * CFrame.Angles(offset:ToEulerAnglesXYZ())
+						bone:SetAttribute("Initial", v.Value)
+					until true
+				end
+			end
+		end
 
-						if not allDone and usedJoints[i] then
-							v.Enabled = v:GetAttribute("AnitrackerEnabled")
-							v.C0 = v.Parent.C0 * offset
-						elseif allDone or not usedJoints[i] then
-							if not self.NoDisableTransition then
-								v.C0 = v.C0:Lerp(v.Parent.C0 * v.Parent.Transform, self.lerpFactor)
+		local main = AnimationTrack.Rigs[rig]
 
-								if (v.C0.Position - (v.Parent.C0 * v.Parent.Transform).Position).Magnitude <= .2 then
+		if not main then
+			AnimationTrack.Rigs[rig] = {
+				Poses = {},
+				Welds = {},
+				Animations = {self}
+			}
+
+			local animate
+			main = AnimationTrack.Rigs[rig]
+
+			animate = game:GetService("RunService").PostSimulation:Connect(function()
+				if not AnimationTrack.Rigs[rig] then
+					animate:Disconnect()
+				end
+
+				local allDone = true
+				local usedJoints = {}
+				local main = AnimationTrack.Rigs[rig]
+
+				for _, v in pairs(main.Animations) do
+					if v.IsPlaying then
+						allDone = false
+
+						for i in pairs(v.Used) do
+							usedJoints[i] = true
+						end
+					end
+				end
+
+				if not boner then
+					for i, v in pairs(main.Welds) do
+						repeat
+							if not v.Parent then
+								main.Welds[i] = nil
+								break
+							end
+
+							local offset = main.Poses[i]
+							offset = CFrame.new(offset.Position * rig:GetScale()) * CFrame.Angles(offset:ToEulerAnglesXYZ())
+
+							if not allDone and usedJoints[i] then
+								v.Enabled = v:GetAttribute("AnitrackerEnabled")
+								v.C0 = v.Parent.C0 * (offset * (v.Parent:GetAttribute("AnitrackerOffset") or CFrame.identity))
+								v.Parent:SetAttribute("AnitrackerTransform", offset)
+							elseif allDone or not usedJoints[i] then
+								if not self.NoDisableTransition then
+									v.C0 = v.C0:Lerp(v.Parent.C0 * v.Parent.Transform, self.lerpFactor)
+
+									if (v.C0.Position - (v.Parent.C0 * v.Parent.Transform).Position).Magnitude <= .2 then
+										v.Enabled = false
+
+										if main then
+											main.Poses[i] = CFrame.new()
+										end
+									end
+								else
 									v.Enabled = false
 
-									if AnimationTrack.Rigs[self.Rig] then
-										AnimationTrack.Rigs[self.Rig].Poses[i] = CFrame.new()
+									if main then
+										main.Poses[i] = v.Parent.Transform
 									end
 								end
-							else
-								v.Enabled = false
+							end
+						until true
+					end
+				else
+					for i, v in pairs(main.Welds) do
+						repeat
+							if not v:GetAttribute("Initial") then
+								main.Welds[i] = nil
+								break
+							end
 
-								if AnimationTrack.Rigs[self.Rig] then
-									AnimationTrack.Rigs[self.Rig].Poses[i] = v.Parent.Transform
+							if not allDone then
+								v.CFrame = v:GetAttribute("Initial") * main.Poses[i]
+							else
+								v.CFrame = v:GetAttribute("Initial")
+
+								if main then
+									main.Poses[i] = CFrame.new()
 								end
 							end
-						end
-					until true
-				end
-			else
-				for i, v in pairs(AnimationTrack.Rigs[rig].Welds) do
-					repeat
-						if not v:GetAttribute("Initial") then
-							AnimationTrack.Rigs[rig].Welds[i] = nil
-							break
-						end
-
-						if not allDone then
-							v.CFrame = v:GetAttribute("Initial") * AnimationTrack.Rigs[rig].Poses[i]
-						else
-							v.CFrame = v:GetAttribute("Initial")
-
-							if AnimationTrack.Rigs[self.Rig] then
-								AnimationTrack.Rigs[self.Rig].Poses[i] = CFrame.new()
-							end
-						end
-					until true
-				end
-			end
-		end)
-
-		local adder
-
-		adder = rig.DescendantAdded:Connect(function(v)
-			if not AnimationTrack.Rigs[rig] then
-				adder:Disconnect()
-			end
-
-			if v:IsA("Motor6D") then
-				self:addWeld(v)
-			end
-		end)
-
-		AnimationTrack.Rigs[rig].Adder = adder
-		AnimationTrack.Rigs[rig].Animate = animate
-	else
-		table.insert(AnimationTrack.Rigs[rig].Animations, self)
-	end
-
-	for _, v in pairs(rig:GetDescendants()) do
-		repeat
-			if boner and v:IsA("Bone") and self.Used[v.Name] then
-				AnimationTrack.Rigs[rig].Welds[v.Name] = v
-				AnimationTrack.Rigs[rig].Poses[v.Name] = CFrame.new()
-
-				break
-			end
-
-			if v:IsA("Motor6D") and self.Used[v.Part1.Name] then
-				self:addWeld(v)
-			end
-		until true
-	end
-
-	coroutine.wrap(function()
-		repeat
-			twait()
-		until rig.Parent
-
-		rig.Parent.ChildRemoved:Connect(function(v)
-			if v == rig then
-				AnimationTrack.Rigs[rig] = nil
-				self:Destroy()
-			end
-		end)
-	end)()
-end
-
-function AnimationTrack.getMotor(self, name)
-	if self.Cache[name] then
-		return self.Cache[name]
-	end
-
-	for _, v in pairs(self.Rig:GetDescendants()) do
-		if v:IsA("Motor6D") and v.Part1.Name == name then
-			self.Cache[name] = v
-			return v
-		end
-	end
-end
-
-function AnimationTrack.setAnimation(self, anim)
-	local length = 0
-
-	if typeof(anim) == "string" then
-		if game:GetService("RunService"):IsClient() then
-			error("You must be on server to pass urls to setAnimation!")
-		end
-
-		anim = loadstring(http:GetAsync(anim))()
-	end
-
-	self.Animation = anim
-
-	local found = {}
-
-	for i, v in pairs(anim) do
-		if v.tm > length then
-			length = v.tm
-		end
-
-		for j, w in pairs(v) do
-			repeat
-				if typeof(w) ~= "table" then
-					if typeof(w) == "string" then
-						table.insert(self.KeyframeMarkers, {
-							Name = j,
-							Value = w,
-							Time = v.tm
-						})
+						until true
 					end
+				end
+			end)
+
+			local adder
+
+			adder = rig.DescendantAdded:Connect(function(v)
+				if not AnimationTrack.Rigs[rig] then
+					adder:Disconnect()
+				end
+
+				if v:IsA("Motor6D") then
+					self:addWeld(v)
+				end
+			end)
+
+			main.Adder = adder
+			main.Animate = animate
+		else
+			insert(main.Animations, self)
+		end
+
+		for _, v in pairs(rig:GetDescendants()) do
+			repeat
+				if boner and v:IsA("Bone") and self.Used[v.Name] then
+					main.Welds[v.Name] = v
+					main.Poses[v.Name] = CFrame.new()
 
 					break
 				end
 
-				found[j] = true
-				self.Used[j] = true
-
-				local o = 1
-
-				while true do
-					local next = anim[i + o]
-
-					if next and next[j] then
-						w.nx = i + o
-						break
-					end
-
-					o = o + 1
-
-					if o >= #(anim) then
-						break
-					end
+				if v:IsA("Motor6D") and self.Used[v.Part1.Name] then
+					self:addWeld(v)
 				end
 			until true
 		end
-	end
 
-	self.Length = length
-end
+		coroutine.wrap(function()
+			repeat
+				twait()
+			until rig.Parent
 
-function AnimationTrack.IsPrioritized(self, j)
-	if not AnimationTrack.Rigs[self.Rig] then
-		return
-	end
-
-	if not AnimationTrack.Rigs[self.Rig].Animations then
-		return
-	end
-
-	local highest = 0
-	local prioritized
-
-	for _, v in pairs(AnimationTrack.Rigs[self.Rig].Animations) do
-		if v.Weight > highest and v.IsPlaying then
-			prioritized = v
-			highest = v.Weight
-		end
-	end
-
-	if prioritized == self then
-		return true
-	elseif prioritized ~= self and prioritized then
-		if not prioritized.Used[j] then
-			local second
-			local highest = 0
-
-			for _, v in pairs(AnimationTrack.Rigs[self.Rig].Animations) do
-				if v.Weight > highest and v.IsPlaying and v ~= prioritized then
-					second = v
-					highest = v.Weight
+			rig.Parent.ChildRemoved:Connect(function(v)
+				if v == rig then
+					AnimationTrack.Rigs[rig] = nil
+					self:Destroy()
 				end
+			end)
+		end)()
+	end
+
+	function AnimationTrack.getMotor(self, name)
+		if self.Cache[name] then
+			return self.Cache[name]
+		end
+
+		for _, v in pairs(self.Rig:GetDescendants()) do
+			if v:IsA("Motor6D") and v.Part1.Name == name then
+				self.Cache[name] = v
+				return v
+			end
+		end
+	end
+
+	function AnimationTrack.setAnimation(self, anim)
+		local length = 0
+
+		if typeof(anim) == "string" then
+			if game:GetService("RunService"):IsClient() then
+				error("You must be on server to pass urls to setAnimation!")
 			end
 
-			return second == self
+			anim = loadstring(http:GetAsync(anim))()
 		end
-	end
-end
 
-function AnimationTrack.setCFrame(self, name, cf, info)
-	local weld = AnimationTrack.Rigs[self.Rig].Welds[name]
-	local poses = AnimationTrack.Rigs[self.Rig].Poses
+		self.Animation = anim
 
-	if not info then
-		AnimationTrack.Rigs[self.Rig].Poses[name] = cf
-		weld.C0 = weld.Parent.C0 * cf
-	else
-		local start = tick()
+		for i, v in pairs(anim) do
+			if v.tm > length then
+				length = v.tm
+			end
 
-		while (tick() - start) < info.Time and AnimationTrack.Rigs[self.Rig] and AnimationTrack.Rigs[self.Rig].Poses do
-			poses[name] = poses[name]:Lerp(
-				cf,
-				tween:GetValue((tick() - start) / info.Time, info.EasingStyle, info.EasingDirection)
-			)
+			for j, w in pairs(v) do
+				repeat
+					if typeof(w) ~= "table" then
+						if typeof(w) == "string" then
+							insert(self.KeyframeMarkers, {
+								Name = j,
+								Value = w,
+								Time = v.tm
+							})
+						end
 
-			weld.C0 = weld.Parent.C0 * poses[name]
-			twait()
+						break
+					end
+
+					self.Used[j] = true
+
+					-- // taken from replay
+					local o = 1
+
+					while true do
+						local next = anim[i + o]
+
+						if next and next[j] then
+							w.nx = i + o
+							break
+						end
+
+						o = o + 1
+
+						if o >= #(anim) then
+							break
+						end
+					end
+				until true
+			end
 		end
-	end
-end
 
-function AnimationTrack.goToKeyframe(self, v, inst)
-	local speed = self.Speed
-
-	if self.Binds[v] then
-		self.Binds[v]:Fire()
+		self.Length = length
 	end
 
-	for j, w in pairs(v) do
-		local br = false
+	function AnimationTrack.IsPrioritized(self, j)
+		local main = AnimationTrack.Rigs[self.Rig]
+		if not main then
+			return
+		end
 
-		repeat
-			if typeof(w) ~= "table" or not AnimationTrack.Rigs[self.Rig].Poses[j] then
-				if typeof(w) == "string" and self.Binds[j] then
-					self.Binds[j]:Fire(w)
+		if not main.Animations then
+			return
+		end
+
+		local highest = 0
+		local prioritized
+
+		for _, v in pairs(main.Animations) do
+			if v.Weight > highest and v.IsPlaying then
+				prioritized = v
+				highest = v.Weight
+			end
+		end
+
+		if prioritized == self then
+			return true
+		elseif prioritized ~= self and prioritized then
+			if not prioritized.Used[j] then
+				local second
+				local highest = 0
+
+				for _, v in pairs(main.Animations) do
+					if v.Weight > highest and v.IsPlaying and v ~= prioritized then
+						second = v
+						highest = v.Weight
+					end
 				end
 
-				break
+				return second == self
 			end
+		end
+	end
 
-			if not AnimationTrack.Rigs[self.Rig].Animations then
-				br = true
-				break
+	function AnimationTrack.setCFrame(self, name, cf, info)
+		local weld = AnimationTrack.Rigs[self.Rig].Welds[name]
+		local poses = AnimationTrack.Rigs[self.Rig].Poses
+
+		if not info then
+			AnimationTrack.Rigs[self.Rig].Poses[name] = cf
+			weld.C0 = weld.Parent.C0 * cf
+		else
+			local start = tick()
+
+			while (tick() - start) < info.Time and AnimationTrack.Rigs[self.Rig] and AnimationTrack.Rigs[self.Rig].Poses do
+				poses[name] = poses[name]:Lerp(
+					cf,
+					tween:GetValue((tick() - start) / info.Time, info.EasingStyle, info.EasingDirection)
+				)
+
+				weld.C0 = weld.Parent.C0 * poses[name]
+				twait()
 			end
+		end
+	end
 
-			local tm = 0
-			local nx = w.nx
-			local cf = w.cf
+	function AnimationTrack.goToKeyframe(self, v, inst, name)
+		local speed = self.Speed
 
-			if nx then
-				cf = self.Animation[w.nx][j].cf
-				tm = self.Animation[w.nx].tm - v.tm
-			end
+		if self.Binds[v] then
+			self.Binds[v]:Fire()
+		end
 
-			if self:IsPrioritized(j) and (w.es == "Constant" or inst) then
-				if inst and self:IsPrioritized(j) then
-					AnimationTrack.Rigs[self.Rig].Poses[j] = cf
+		for j, w in pairs(v) do
+			local br
+
+			repeat
+				if typeof(w) ~= "table" or not AnimationTrack.Rigs[self.Rig].Poses[j] then
+					if typeof(w) == "string" and self.Binds[j] then
+						self.Binds[j]:Fire(w)
+					end
+
 					break
 				end
 
-				local start = tick()
+				if not AnimationTrack.Rigs[self.Rig].Animations then
+					br = true
+					break
+				end
+
+				local tm = 0
+				local nx = w.nx
+				local cf = w.cf
+				local poses = AnimationTrack.Rigs[self.Rig].Poses
+
+				if nx then
+					cf = self.Animation[w.nx][j].cf
+					tm = self.Animation[w.nx].tm - v.tm
+				end
+
+				if w.es == "Constant" or inst then
+					if self:IsPrioritized(j) then
+						if inst then
+							poses[j] = cf
+							break
+						end
+
+						local start = tick()
+
+						coroutine.wrap(function()
+							repeat
+								speed = self.Speed
+								poses[j] = cf
+								twait()
+							until tick() - start >= (tm / speed) or not self:IsPrioritized(j)
+						end)()
+					end
+
+					break
+				end
+
+				if not enumExists("EasingStyle", w.es) then
+					w.es = "Linear"
+				end
 
 				coroutine.wrap(function()
-					repeat
-						AnimationTrack.Rigs[self.Rig].Poses[j] = cf
-						twait()
-					until tick() - start >= (tm / speed)
-				end)()
+					local s = tick()
+					local current = poses[j]
+					local es, ed = Enum.EasingStyle[w.es], Enum.EasingDirection[w.ed]
 
+					repeat
+						twait()
+						speed = self.Speed
+
+						local cf = current:Lerp(cf, tween:GetValue(
+							(tick() - s) / (tm / speed), es, ed
+						))
+
+						local alpha = min(self.lerpFactor * max(1, speed), 1)
+
+						if self:IsPrioritized(j) then
+							if alpha < 1 then
+								poses[j] = poses[j]:Lerp(cf, alpha)
+							else
+								poses[j] = cf
+							end
+						end
+					until (tick() - s) >= (tm / speed)
+				end)()
+			until true
+
+			if br then
 				break
 			end
+		end
+	end
 
-			if not enumExists("EasingStyle", w.es) then
-				w.es = "Linear"
+	function AnimationTrack.Play(self, speed)
+		assert(self.Rig, "Must use setRig before playing!")
+
+		speed = speed or self.Speed
+
+		if self.IsPlaying then
+			for _, v in pairs(self.Connections) do
+				v:Disconnect()
 			end
+		end
 
+		self.Speed = speed
+		self.IsPlaying = true
+		self.Weight = self.RealWeight
+
+		self.TimePosition = 0
+
+		-- // just loop through all the keyframes instantly if speed is too high since it'll break
+		if false then
 			coroutine.wrap(function()
-				local s = tick()
-				local current = AnimationTrack.Rigs[self.Rig].Poses[j]
-
 				repeat
 					twait()
 
-					local cf = current:Lerp(cf, tween:GetValue(
-						(tick() - s) / (tm / speed),
-						Enum.EasingStyle[w.es],
-						Enum.EasingDirection[w.ed]
-						))
-
-					if self:IsPrioritized(j) then
-						AnimationTrack.Rigs[self.Rig].Poses[j] = AnimationTrack.Rigs[self.Rig].Poses[j]:Lerp(cf, math.min(self.lerpFactor * math.max(1, speed), 1))
+					for _, v in ipairs(self.Animation) do
+						self:goToKeyframe(v, true, self.Name)
+						self.TimePosition = self.TimePosition + v.tm
 					end
-				until (tick() - s) >= (tm / speed)
-			end)()
-		until true
 
-		if br then
-			break
-		end
-	end
-end
+					self.TimePosition = self.Length
+					task.wait(self.Stall)
+				until not self.Looped
 
-function AnimationTrack.Play(self, speed)
-	assert(self.Rig, "Must use setRig before playing!")
-
-	speed = speed or self.Speed
-
-	if self.IsPlaying then
-		for _, v in pairs(self.Connections) do
-			v:Disconnect()
-		end
-	end
-
-	self.Speed = speed
-	self.IsPlaying = true
-	self.Weight = self.RealWeight
-
-	self.TimePosition = 0
-
-	coroutine.wrap(function()
-		repeat
-			self.TimePosition = 0
-
-			for _, v in ipairs(self.Animation) do
-				local cnt
-				local total = 0
-				local time = v.tm
-
-				cnt = game:GetService("RunService").PreAnimation:Connect(function(dt)
-					total = total + dt * self.Speed
-
-					if total >= time then
-						cnt:Disconnect()
-						self:goToKeyframe(v)
-					end
-				end)
-
-				table.insert(self.Connections, cnt)
-			end
-
-			repeat
-				self.TimePosition = self.TimePosition + twait() * self.Speed
-			until self.TimePosition >= (self.Length + (self.Looped and 0 or self.Stall)) or not self.IsPlaying
-
-			if self.TimePosition >= self.Length and not self.Looped then
 				self:Stop()
-			end
-		until not self.Looped or not self.IsPlaying
-	end)()
-end
+			end)()
 
-function AnimationTrack.Stop(self)
-	if not self.IsPlaying then
-		return
+			return
+		end
+
+		coroutine.wrap(function()
+			repeat
+				self.TimePosition = 0
+
+				for _, v in ipairs(self.Animation) do
+					local cnt
+					local time = v.tm
+
+					cnt = game:GetService("RunService").PostSimulation:Connect(function(dt)
+						if self.TimePosition >= time then
+							cnt:Disconnect()
+							self:goToKeyframe(v, false, self.Name)
+						end
+					end)
+
+					insert(self.Connections, cnt)
+				end
+
+				repeat
+					self.TimePosition = self.TimePosition + twait() * self.Speed
+				until self.TimePosition >= (self.Length + (self.Looped and 0 or self.Stall)) or not self.IsPlaying
+
+				if self.TimePosition >= self.Length and not self.Looped then
+					self:Stop()
+				end
+
+				if self.Looped then
+					self.DidLoop:Fire()
+				end
+			until not self.Looped or not self.IsPlaying
+		end)()
 	end
 
-	self.StopBind:Fire()
+	function AnimationTrack.Stop(self)
+		if not self.IsPlaying then
+			return
+		end
 
-	self.Weight = 0
-	self.IsPlaying = false
+		self.Stopped:Fire()
 
-	if self.Connections then
-		for _, cnt in pairs(self.Connections) do
-			cnt:Disconnect()
+		self.Weight = 0
+		self.IsPlaying = false
+        self.TimePosition = self.Length
+
+		if self.Connections then
+			for _, cnt in pairs(self.Connections) do
+				cnt:Disconnect()
+			end
 		end
 	end
+
+	function AnimationTrack.AdjustSpeed(self, speed)
+		self.Speed = speed or 1
+	end
 end
 
-function AnimationTrack.AdjustSpeed(self, speed)
-	self.Speed = speed or 1
-end
 
 NLS([[
 -- Movement script integration
