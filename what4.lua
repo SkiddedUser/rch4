@@ -215,10 +215,17 @@ function AnimationTrack.setRig(self, rig)
 						local offset = AnimationTrack.Rigs[rig].Poses[i]
 						offset = CFrame.new(offset.Position * rig:GetScale()) * CFrame.Angles(offset:ToEulerAnglesXYZ())
 
+						local offset = AnimationTrack.Rigs[rig].Poses[i]
+						offset = CFrame.new(offset.Position * rig:GetScale()) * CFrame.Angles(offset:ToEulerAnglesXYZ())
+
 						if not allDone and usedJoints[i] then
-							if not v:GetAttribute("Override") then -- Comprobación adicional
-								v.Enabled = v:GetAttribute("AnitrackerEnabled")
-								v.C0 = v.Parent.C0 * offset
+							local externalCFrame = v:GetAttribute("ExternalCFrame")
+							if externalCFrame then
+								v.C0 = externalCFrame -- Usa el CFrame externo si está definido
+							else
+								v.C0 = v.Parent.C0 * offset -- Usa el CFrame de Anitracker
+							end
+							v.Enabled = v:GetAttribute("AnitrackerEnabled")
 						elseif allDone or not usedJoints[i] then
 							if not self.NoDisableTransition then
 								v.C0 = v.C0:Lerp(v.Parent.C0 * v.Parent.Transform, self.lerpFactor)
@@ -237,7 +244,6 @@ function AnimationTrack.setRig(self, rig)
 									AnimationTrack.Rigs[self.Rig].Poses[i] = v.Parent.Transform
 								end
 							end
-						end
 						end
 					until true
 				end
