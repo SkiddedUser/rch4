@@ -889,7 +889,6 @@ do
 	end
 end
 
-return AnimationTrack
 NLS([[
 -- Movement script integration
 local RunService = game:GetService('RunService')
