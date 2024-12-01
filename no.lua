@@ -996,7 +996,8 @@ if tool then
 			handleAttack()
 		end
 	end)
-end
+	end
+	end
 
 print("Animation script initialized")
 
