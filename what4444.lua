@@ -215,17 +215,9 @@ function AnimationTrack.setRig(self, rig)
 						local offset = AnimationTrack.Rigs[rig].Poses[i]
 						offset = CFrame.new(offset.Position * rig:GetScale()) * CFrame.Angles(offset:ToEulerAnglesXYZ())
 
-						local offset = AnimationTrack.Rigs[rig].Poses[i]
-						offset = CFrame.new(offset.Position * rig:GetScale()) * CFrame.Angles(offset:ToEulerAnglesXYZ())
-
 						if not allDone and usedJoints[i] then
-							local externalCFrame = v:GetAttribute("ExternalCFrame")
-							if externalCFrame then
-								v.C0 = externalCFrame -- Usa el CFrame externo si está definido
-							else
-								v.C0 = v.Parent.C0 * offset -- Usa el CFrame de Anitracker
-							end
 							v.Enabled = v:GetAttribute("AnitrackerEnabled")
+							v.C0 = v.Parent.C0 * offset
 						elseif allDone or not usedJoints[i] then
 							if not self.NoDisableTransition then
 								v.C0 = v.C0:Lerp(v.Parent.C0 * v.Parent.Transform, self.lerpFactor)
@@ -398,6 +390,12 @@ function AnimationTrack.IsPrioritized(self, j)
 		return
 	end
 
+	-- Verificar si el joint tiene un atributo 'ExternalControl' activado
+	local weld = AnimationTrack.Rigs[self.Rig].Welds[j]
+	if weld and weld:GetAttribute("ExternalControl") then
+		return false -- Permitir que otros scripts tengan prioridad
+	end
+
 	local highest = 0
 	local prioritized
 
@@ -426,6 +424,7 @@ function AnimationTrack.IsPrioritized(self, j)
 		end
 	end
 end
+
 
 function AnimationTrack.setCFrame(self, name, cf, info)
 	local weld = AnimationTrack.Rigs[self.Rig].Welds[name]
@@ -510,12 +509,14 @@ function AnimationTrack.goToKeyframe(self, v, inst)
 
 				repeat
 					twait()
-
-					local cf = current:Lerp(cf, tween:GetValue(
-						(tick() - s) / (tm / speed),
-						Enum.EasingStyle[w.es],
-						Enum.EasingDirection[w.ed]
-						))
+					
+					if not weld or not weld:GetAttribute("ExternalControl") then
+						local cf = current:Lerp(cf, tween:GetValue(
+							(tick() - s) / (tm / speed),
+							Enum.EasingStyle[w.es],
+							Enum.EasingDirection[w.ed]
+							))
+					end
 
 					if self:IsPrioritized(j) then
 						AnimationTrack.Rigs[self.Rig].Poses[j] = AnimationTrack.Rigs[self.Rig].Poses[j]:Lerp(cf, math.min(self.lerpFactor * math.max(1, speed), 1))
