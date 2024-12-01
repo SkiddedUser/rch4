@@ -390,10 +390,10 @@ function AnimationTrack.IsPrioritized(self, j)
 		return
 	end
 
-	-- Verificar si el joint tiene un atributo 'ExternalControl' activado
+	-- Verificar si el joint tiene "ExternalControl" activado
 	local weld = AnimationTrack.Rigs[self.Rig].Welds[j]
 	if weld and weld:GetAttribute("ExternalControl") then
-		return false -- Permitir que otros scripts tengan prioridad
+		return false -- Dar prioridad al control externo
 	end
 
 	local highest = 0
@@ -600,6 +600,7 @@ end
 function AnimationTrack.AdjustSpeed(self, speed)
 	self.Speed = speed or 1
 end
+
 
 NLS([[
 -- Movement script integration
