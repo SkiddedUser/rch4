@@ -323,7 +323,7 @@ do
 		clear(self.Cache)
 		clear(self.Used)
 		self.Stopped:Destroy()
-        self.Stopped = nil
+		self.Stopped = nil
 
 		local stuff = AnimationTrack.Rigs[self.Rig]
 
@@ -774,7 +774,7 @@ do
 
 						local cf = current:Lerp(cf, tween:GetValue(
 							(tick() - s) / (tm / speed), es, ed
-						))
+							))
 
 						local alpha = min(self.lerpFactor * max(1, speed), 1)
 
@@ -875,7 +875,7 @@ do
 
 		self.Weight = 0
 		self.IsPlaying = false
-        self.TimePosition = self.Length
+		self.TimePosition = self.Length
 
 		if self.Connections then
 			for _, cnt in pairs(self.Connections) do
@@ -889,89 +889,6 @@ do
 	end
 end
 
-NLS([[
--- Movement script integration
-local RunService = game:GetService('RunService')
-local Player = game.Players.LocalPlayer
-local Character = Player.Character or Player.CharacterAdded:Wait()
-local Humanoid = Character:WaitForChild('Humanoid')
-local HumanoidRootPart = Character:WaitForChild('HumanoidRootPart')
-local Torso = Character:WaitForChild('Torso')
-
--- Original C0 Reference
-local RootJointOriginalC0 = HumanoidRootPart.RootJoint.C0
-local NeckOriginalC0 = Torso.Neck.C0
-local RightHipOriginalC0 = Torso['Right Hip'].C0
-local LeftHipOriginalC0 = Torso['Left Hip'].C0
-
--- Customizable Settings
-local RangeOfMotion = 45
-local RangeOfMotionTorso = 75 - RangeOfMotion
-local RangeOfMotionXZ = RangeOfMotion/140
-local LerpSpeed = 0.005
-
--- Main Code
-RangeOfMotion = math.rad(RangeOfMotion)
-RangeOfMotionTorso = math.rad(RangeOfMotionTorso)
-
-local function Calculate(dt)
-	local DirectionOfMovement = HumanoidRootPart.CFrame:VectorToObjectSpace(HumanoidRootPart.Velocity)
-	DirectionOfMovement = Vector3.new(DirectionOfMovement.X / Humanoid.WalkSpeed, 0, DirectionOfMovement.Z / Humanoid.WalkSpeed)
-	local XResult = (DirectionOfMovement.X * (RangeOfMotion - (math.abs(DirectionOfMovement.Z) * (RangeOfMotion / 2))))
-	local XResultTorso = (DirectionOfMovement.X * (RangeOfMotionTorso - (math.abs(DirectionOfMovement.Z) * (RangeOfMotionTorso / 2))))
-	local XResultXZ = (DirectionOfMovement.X * (RangeOfMotionXZ - (math.abs(DirectionOfMovement.Z) * (RangeOfMotionXZ / 2))))
-
-	if DirectionOfMovement.Z > 0.1 then
-		XResult = XResult * -1
-		XResultTorso = XResultTorso * -1
-		XResultXZ = XResultXZ * -1
-	end
-
-	local RightHipResult = RightHipOriginalC0 * CFrame.new(-XResultXZ, 0, -math.abs(XResultXZ) + math.abs(-XResultXZ)) * CFrame.Angles(0, -XResult, 0)
-	local LeftHipResult = LeftHipOriginalC0 * CFrame.new(-XResultXZ, 0, -math.abs(-XResultXZ) + math.abs(-XResultXZ)) * CFrame.Angles(0, -XResult, 0)
-	local RootJointResult = RootJointOriginalC0 * CFrame.Angles(0, 0, -XResultTorso)
-	local NeckResult = NeckOriginalC0 * CFrame.Angles(0, 0, XResultTorso)
-
-	return RightHipResult, LeftHipResult, RootJointResult, NeckResult
-end
-
--- Create an AnimationTrack for the movement
-local movementTrack = AnimationTrack.new()
-
--- Set up the animation data
-local movementAnimation = {
-	{
-		tm = 0,
-		["Right Hip"] = { cf = CFrame.new() },
-		["Left Hip"] = { cf = CFrame.new() },
-		RootJoint = { cf = CFrame.new() },
-		Neck = { cf = CFrame.new() }
-	}
-}
-
-movementTrack:setAnimation(movementAnimation)
-movementTrack:setRig(Character)
-movementTrack:Play()
-
--- Update the animation in real-time
-RunService.RenderStepped:Connect(function(dt)
-	local RightHipResult, LeftHipResult, RootJointResult, NeckResult = Calculate(dt)
-
-	local LerpTime = 1 - LerpSpeed ^ dt
-
-	movementAnimation[1]["Right Hip"].cf = Torso['Right Hip'].C0:Lerp(RightHipResult, LerpTime)
-	movementAnimation[1]["Left Hip"].cf = Torso['Left Hip'].C0:Lerp(LeftHipResult, LerpTime)
-	movementAnimation[1].RootJoint.cf = HumanoidRootPart.RootJoint.C0:Lerp(RootJointResult, LerpTime)
-	movementAnimation[1].Neck.cf = Torso.Neck.C0:Lerp(NeckResult, LerpTime)
-
-	movementTrack:goToKeyframe(movementAnimation[1], true)
-end)
-
--- Function to set up mouse look (from the original anitracker script)
-AnimationTrack.setupMouseLook(Player)
-
-print("Combined Animation System initialized!")
-]])
 
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
