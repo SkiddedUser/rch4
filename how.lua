@@ -390,41 +390,47 @@ function AnimationTrack.IsPrioritized(self, j)
 		return
 	end
 
-	-- Verificar si el joint tiene "ExternalControl" activado
+	-- Check if the joint has "ExternalControl" attribute
 	local weld = AnimationTrack.Rigs[self.Rig].Welds[j]
 	if weld and weld:GetAttribute("ExternalControl") then
-		return false -- Dar prioridad al control externo
+		return false -- Give priority to external control (like your movement script)
 	end
 
+	-- Modify the prioritization logic
 	local highest = 0
 	local prioritized
+	local secondHighest = 0
+	local secondPrioritized
 
 	for _, v in pairs(AnimationTrack.Rigs[self.Rig].Animations) do
 		if v.Weight > highest and v.IsPlaying then
-			prioritized = v
+			secondHighest = highest
+			secondPrioritized = prioritized
+
 			highest = v.Weight
+			prioritized = v
+		elseif v.Weight > secondHighest and v.IsPlaying and v ~= prioritized then
+			secondHighest = v.Weight
+			secondPrioritized = v
 		end
 	end
 
+	-- If this animation is the current animation and no external control is set
 	if prioritized == self then
 		return true
-	elseif prioritized ~= self and prioritized then
-		if not prioritized.Used[j] then
-			local second
-			local highest = 0
+	end
 
-			for _, v in pairs(AnimationTrack.Rigs[self.Rig].Animations) do
-				if v.Weight > highest and v.IsPlaying and v ~= prioritized then
-					second = v
-					highest = v.Weight
-				end
-			end
-
-			return second == self
+	-- If another animation is prioritized, check for joint usage
+	if prioritized ~= self and prioritized then
+		-- If the current animation is using the joint and is not the top priority
+		if self.Used[j] then
+			-- Allow a lower priority animation to partially control the joint
+			return true
 		end
 	end
-end
 
+	return false
+end
 
 function AnimationTrack.setCFrame(self, name, cf, info)
 	local weld = AnimationTrack.Rigs[self.Rig].Welds[name]
@@ -509,7 +515,7 @@ function AnimationTrack.goToKeyframe(self, v, inst)
 
 				repeat
 					twait()
-					
+
 					if not weld or not weld:GetAttribute("ExternalControl") then
 						local cf = current:Lerp(cf, tween:GetValue(
 							(tick() - s) / (tm / speed),
@@ -600,7 +606,6 @@ end
 function AnimationTrack.AdjustSpeed(self, speed)
 	self.Speed = speed or 1
 end
-
 
 NLS([[
 -- Movement script integration
